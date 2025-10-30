@@ -94,14 +94,6 @@ app.post("/pay/5", (c) => handlePayment(c, "5"));
 app.post("/pay/10", (c) => handlePayment(c, "10"));
 app.post("/pay/100", (c) => handlePayment(c, "100"));
 
-// Vercel Edge export and local Bun serve
-export const config = { runtime: "edge" };
-
-if (typeof (globalThis as any).Bun !== "undefined") {
-  const port = parseInt(env.PORT ?? "3000", 10);
-  (globalThis as any).Bun.serve({ port, fetch: app.fetch });
-  // eslint-disable-next-line no-console
-  console.log(`Server listening on http://localhost:${port}`);
-}
-
+// Vercel Serverless Function (Node) export
+export const config = { runtime: "nodejs20.x" };
 export default app.fetch;
