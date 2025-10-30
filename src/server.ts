@@ -10,12 +10,12 @@ const EnvSchema = z.object({
     .string()
     .regex(/^0x[0-9a-fA-F]+$/, "PRIVATE_KEY must be a 0x-prefixed hex string"),
   PORT: z.string().optional(),
-  PAYMENTS_NETWORK: z
-    .enum(["base-mainnet", "base-sepolia"]).optional(),
+  PAYMENTS_NETWORK: z.enum(["base", "base-sepolia"]).optional(),
 });
 
-// Bun provides env as Bun.env
-const parsed = EnvSchema.safeParse(Bun.env as unknown as NodeJS.ProcessEnv);
+// Read env from Bun (if present) or Node
+const envSource = (globalThis as any)?.Bun?.env ?? process.env;
+const parsed = EnvSchema.safeParse(envSource as unknown as NodeJS.ProcessEnv);
 if (!parsed.success) {
   // Fail fast if env not configured properly
   // Use minimal output to avoid leaking sensitive information
@@ -24,7 +24,7 @@ if (!parsed.success) {
 }
 
 const env = parsed.data;
-const paymentsNetwork = env.PAYMENTS_NETWORK ?? "base-mainnet"; // default to mainnet per request
+const paymentsNetwork = env.PAYMENTS_NETWORK ?? "base"; // default Base mainnet
 
 // x402 amounts are specified in 6-decimal USDC units.
 // 1 USDC = 1_000_000 units
@@ -97,9 +97,9 @@ app.post("/pay/100", (c) => handlePayment(c, "100"));
 // Vercel Edge export and local Bun serve
 export const config = { runtime: "edge" };
 
-if (typeof Bun !== "undefined") {
+if (typeof (globalThis as any).Bun !== "undefined") {
   const port = parseInt(env.PORT ?? "3000", 10);
-  Bun.serve({ port, fetch: app.fetch });
+  (globalThis as any).Bun.serve({ port, fetch: app.fetch });
   // eslint-disable-next-line no-console
   console.log(`Server listening on http://localhost:${port}`);
 }
