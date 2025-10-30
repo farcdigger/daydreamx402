@@ -15,15 +15,9 @@ const EnvSchema = z.object({
 
 // Read env from Bun (if present) or Node
 const envSource = (globalThis as any)?.Bun?.env ?? process.env;
-const parsed = EnvSchema.safeParse(envSource as unknown as NodeJS.ProcessEnv);
-if (!parsed.success) {
-  // Fail fast if env not configured properly
-  // Use minimal output to avoid leaking sensitive information
-  console.error("Invalid environment:", parsed.error.flatten().fieldErrors);
-  process.exit(1);
-}
-
-const env = parsed.data;
+const parsed = EnvSchema.safeParse(envSource as unknown as any);
+const env = parsed.success ? parsed.data : ({} as any);
+const envError = parsed.success ? null : parsed.error;
 const paymentsNetwork = env.PAYMENTS_NETWORK ?? "base"; // default Base mainnet
 
 // x402 amounts are specified in 6-decimal USDC units.
@@ -38,9 +32,14 @@ const PRICE_USD: Record<string, number> = {
   "100": 100,
 };
 
-const app = new Hono();
+export const app = new Hono();
 
-app.get("/health", (c) => c.json({ ok: true }));
+app.get("/health", (c) => {
+  if (envError) {
+    return c.json({ ok: false, error: "Invalid environment", details: envError.flatten().fieldErrors }, 500);
+  }
+  return c.json({ ok: true });
+});
 
 // Generic payment endpoint: /pay/:amount where amount in {5,10,100}
 const handlePayment = async (c: any, amountParam?: string) => {
@@ -51,6 +50,9 @@ const handlePayment = async (c: any, amountParam?: string) => {
   }
 
   try {
+    if (envError) {
+      return c.json({ error: "Invalid environment", details: envError.flatten().fieldErrors }, 500);
+    }
     // Authenticate with Dreams router using Bun.env per tutorial
     const { dreamsRouter, user } = await createDreamsRouterAuth(
       privateKeyToAccount(env.PRIVATE_KEY as `0x${string}`),
@@ -94,6 +96,5 @@ app.post("/pay/5", (c) => handlePayment(c, "5"));
 app.post("/pay/10", (c) => handlePayment(c, "10"));
 app.post("/pay/100", (c) => handlePayment(c, "100"));
 
-// Vercel Serverless Function (Node) export
-export const config = { runtime: "nodejs" };
+// Export fetch handler for environments that support it (Edge-like)
 export default app.fetch;
