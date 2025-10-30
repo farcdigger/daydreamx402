@@ -95,5 +95,5 @@ app.post("/pay/10", (c) => handlePayment(c, "10"));
 app.post("/pay/100", (c) => handlePayment(c, "100"));
 
 // Vercel Serverless Function (Node) export
-export const config = { runtime: "nodejs20.x" };
+export const config = { runtime: "nodejs" };
 export default app.fetch;
