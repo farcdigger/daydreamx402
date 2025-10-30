@@ -9,7 +9,7 @@
     "resolveJsonModule": true,
     "verbatimModuleSyntax": true,
     "lib": ["ES2022", "DOM"],
-    "types": []
+    "types": ["node"]
   },
   "include": ["src"]
 }
