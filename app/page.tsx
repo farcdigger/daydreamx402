@@ -80,7 +80,9 @@ export default function Home() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Payment request failed');
+        const errorMsg = errorData.message || errorData.error || 'Payment request failed';
+        const details = errorData.details ? ` Details: ${errorData.details}` : '';
+        throw new Error(`${errorMsg}${details}`);
       }
 
       const data = await response.json();

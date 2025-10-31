@@ -7,13 +7,23 @@ const NETWORK_ENV = process.env.NETWORK || "base";
 const SELLER_WALLET = process.env.SELLER_WALLET as `0x${string}` || "0x6a40e304193d2BD3fa7479c35a45bA4CCDBb4683";
 const SELLER_PRIVATE_KEY = process.env.SELLER_PRIVATE_KEY as `0x${string}`;
 
+// Cache Dreams Router instance
+let cachedDreamsRouter: Awaited<ReturnType<typeof createEVMAuthFromPrivateKey>>['dreamsRouter'] | null = null;
+
 // Initialize Dreams Router with x402 payments
 async function getDreamsRouter() {
   if (!SELLER_PRIVATE_KEY) {
+    console.error('SELLER_PRIVATE_KEY is not set');
     return null;
   }
   
+  // Return cached instance if available
+  if (cachedDreamsRouter) {
+    return cachedDreamsRouter;
+  }
+  
   try {
+    console.log('Creating Dreams Router with network:', NETWORK_ENV);
     // Use createEVMAuthFromPrivateKey helper as per documentation
     const { dreamsRouter } = await createEVMAuthFromPrivateKey(
       SELLER_PRIVATE_KEY,
@@ -23,9 +33,12 @@ async function getDreamsRouter() {
         },
       }
     );
+    cachedDreamsRouter = dreamsRouter;
+    console.log('Dreams Router created successfully');
     return dreamsRouter;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to create Dreams Router:', error);
+    console.error('Error details:', error?.message, error?.stack);
     return null;
   }
 }
@@ -55,10 +68,13 @@ export async function POST(req: NextRequest) {
       // Make AI call via Dreams Router - this automatically triggers x402 payment
       // The payment amount and recipient come from the router's 402 response
       try {
+        console.log('Calling generateText with Dreams Router...');
         const { text } = await generateText({
           model: dreamsRouter('google-vertex/gemini-2.5-flash'),
           prompt: 'Token presale payment confirmation',
         });
+
+        console.log('generateText completed, text:', text);
 
         // x402 payment is processed automatically by Dreams Router
         // Return 402 to indicate payment was initiated
@@ -75,10 +91,16 @@ export async function POST(req: NextRequest) {
         );
       } catch (dreamsError: any) {
         console.error('Dreams Router x402 payment error:', dreamsError);
+        console.error('Error name:', dreamsError?.name);
+        console.error('Error message:', dreamsError?.message);
+        console.error('Error stack:', dreamsError?.stack);
+        console.error('Full error:', JSON.stringify(dreamsError, null, 2));
+        
         return NextResponse.json(
           {
             error: "Payment gateway error",
-            message: dreamsError.message || "Failed to initiate x402 payment",
+            message: dreamsError?.message || dreamsError?.toString() || "Failed to initiate x402 payment",
+            details: dreamsError?.stack?.substring(0, 300) || "Unknown error",
           },
           { status: 500 }
         );
