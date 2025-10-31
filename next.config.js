@@ -24,11 +24,12 @@ const nextConfig = {
         querystring: false,
       };
 
-      // Exclude Daydreams SDK packages from client bundle (they use Node.js modules)
+      // Exclude only Node.js-specific parts from client bundle
+      // generateX402PaymentBrowser is browser-compatible, allow it
       config.externals = config.externals || [];
       config.externals.push({
         '@daydreamsai/core': 'commonjs @daydreamsai/core',
-        '@daydreamsai/ai-sdk-provider': 'commonjs @daydreamsai/ai-sdk-provider',
+        // Keep ai-sdk-provider for browser functions like generateX402PaymentBrowser
         'ws': 'commonjs ws',
         'events': 'commonjs events',
       });
