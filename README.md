@@ -39,7 +39,7 @@ Create `.env` file:
 ```env
 SELLER_PRIVATE_KEY=0x...  # Private key of wallet for Daydreams Router auth
 PAYMENT_AMOUNT=100000     # $0.10 USDC per request (6-decimal units)
-NETWORK=base-sepolia      # base-sepolia (test) or base (mainnet)
+NETWORK=base              # base (mainnet) or base-sepolia (test)
 ```
 
 ### 3. Deploy to Vercel
@@ -95,8 +95,8 @@ Set `PAYMENT_AMOUNT` in 6-decimal USDC units:
 
 ### Network
 
+- `base`: Base mainnet (default, for production)
 - `base-sepolia`: Base Sepolia testnet (for testing)
-- `base`: Base mainnet (for production)
 
 ### Model
 
