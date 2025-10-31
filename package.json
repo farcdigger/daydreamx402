@@ -13,7 +13,6 @@
   "dependencies": {
     "@daydreamsai/ai-sdk-provider": "^0.1.5",
     "@daydreamsai/core": "^0.3.22",
-    "@hono/node-server": "^1.13.0",
     "hono": "^4.6.3",
     "viem": "^2.21.17",
     "x402": "^0.7.1"

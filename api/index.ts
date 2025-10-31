@@ -1,5 +1,5 @@
 // Vercel serverless function entry point
-import { handle } from '@hono/node-server/vercel';
 import app from '../src/index';
 
-export default handle(app);
+// Vercel expects a default export of the Hono app
+export default app;
