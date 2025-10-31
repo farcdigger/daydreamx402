@@ -5,19 +5,25 @@ import { privateKeyToAccount } from "viem/accounts";
 
 // Environment variables
 const SELLER_PRIVATE_KEY = process.env.SELLER_PRIVATE_KEY as `0x${string}`;
-const PAYMENT_AMOUNT = process.env.PAYMENT_AMOUNT || "100000"; // $0.10 USDC (6 decimals)
+const PAYMENT_AMOUNT = process.env.PAYMENT_AMOUNT || "5000000"; // $5 USDC (6 decimals: 5000000)
 const NETWORK_ENV = process.env.NETWORK || "base";
 const NETWORK = (NETWORK_ENV === "base" || NETWORK_ENV === "base-sepolia" 
   ? NETWORK_ENV 
   : "base") as "base" | "base-sepolia";
 
 if (!SELLER_PRIVATE_KEY) {
-  throw new Error("SELLER_PRIVATE_KEY environment variable is required");
+  console.warn("Warning: SELLER_PRIVATE_KEY not set. Payments will not work.");
+}
+
+interface PaymentRequest {
+  wallet: `0x${string}`;
+  amount?: string;
+  prompt?: string;
 }
 
 /**
- * Main payment endpoint with x402 payment via Daydreams Router
- * Based on: https://docs.daydreams.systems/docs/router
+ * Payment endpoint with wallet verification and AI service
+ * User connects wallet (MetaMask), pays $5 USDC, then gets AI response
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS headers
@@ -34,47 +40,77 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { prompt } = req.body;
+    const { wallet, amount, prompt } = req.body as PaymentRequest;
 
-    if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
+    // Validate wallet
+    if (!wallet || typeof wallet !== "string") {
       return res.status(400).json({
-        error: "Missing required field: prompt",
+        error: "Missing or invalid wallet address",
+      });
+    }
+
+    // Validate wallet format
+    if (!/^0x[a-fA-F0-9]{40}$/.test(wallet)) {
+      return res.status(400).json({
+        error: "Invalid wallet address format",
+      });
+    }
+
+    // Payment amount (default: $5 = 5000000 in 6 decimals)
+    const paymentAmount = amount || PAYMENT_AMOUNT;
+    const amountNum = parseInt(paymentAmount, 10);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      return res.status(400).json({
+        error: "Invalid payment amount",
+      });
+    }
+
+    if (!SELLER_PRIVATE_KEY) {
+      return res.status(500).json({
+        error: "Server configuration error: SELLER_PRIVATE_KEY not set",
       });
     }
 
     // Initialize Daydreams Router with x402 payment
-    // Reference: https://docs.daydreams.systems/docs/router
     const account = privateKeyToAccount(SELLER_PRIVATE_KEY);
-    const sellerWalletAddress = account.address; // Payment recipient address
+    const sellerWalletAddress = account.address;
     
     const { dreamsRouter, user } = await createDreamsRouterAuth(account, {
       payments: {
-        amount: PAYMENT_AMOUNT, // $0.10 USDC per request (6-decimal units)
+        amount: paymentAmount, // Amount in 6-decimal USDC units
         network: NETWORK,
       },
     });
 
-    // Create Dreams agent with router
+    // Create Dreams agent
     const agent = createDreams({
       logLevel: LogLevel.ERROR,
       model: dreamsRouter("google-vertex/gemini-2.5-flash"),
     });
 
-    // Execute AI request - this triggers x402 payment
-    // Payment goes to sellerWalletAddress (derived from SELLER_PRIVATE_KEY)
-    const response = await agent.complete(prompt);
+    // Execute AI request if prompt provided (triggers payment)
+    let aiResponse = null;
+    if (prompt && prompt.trim()) {
+      const response = await agent.complete(prompt);
+      aiResponse = {
+        text: response.outputText || "",
+        model: "google-vertex/gemini-2.5-flash",
+      };
+    }
 
     return res.status(200).json({
       status: "success",
-      response: response.outputText || "",
-      model: "google-vertex/gemini-2.5-flash",
+      message: "Payment processed successfully",
+      wallet,
+      paymentAmount,
+      paymentAmountUSD: (parseInt(paymentAmount) / 1000000).toFixed(2),
+      paymentRecipient: sellerWalletAddress,
       network: NETWORK,
-      paymentAmount: PAYMENT_AMOUNT,
-      paymentRecipient: sellerWalletAddress, // Wallet address that receives payments
       userBalance: user.balance,
+      ...(aiResponse && { aiResponse }),
     });
   } catch (error: any) {
-    console.error("Daydreams Router error:", error);
+    console.error("Payment endpoint error:", error);
     return res.status(500).json({
       error: "Internal server error",
       details: error.message,

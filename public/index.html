@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Daydreams x402 Payment - AI Service</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      padding: 40px;
+      max-width: 600px;
+      width: 100%;
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .wallet-section {
+      background: #f7f9fc;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 30px;
+    }
+
+    .wallet-status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    .wallet-address {
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      color: #333;
+      background: white;
+      padding: 8px 12px;
+      border-radius: 6px;
+      flex: 1;
+      word-break: break-all;
+    }
+
+    .btn {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 14px 28px;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      width: 100%;
+      margin-bottom: 15px;
+    }
+
+    .btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background: #e0e0e0;
+      color: #333;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: #d0d0d0;
+    }
+
+    .payment-section {
+      margin-bottom: 30px;
+    }
+
+    .payment-amount {
+      font-size: 32px;
+      font-weight: bold;
+      color: #667eea;
+      text-align: center;
+      margin: 20px 0;
+    }
+
+    .prompt-section {
+      margin-bottom: 30px;
+    }
+
+    .prompt-input {
+      width: 100%;
+      padding: 15px;
+      border: 2px solid #e0e0e0;
+      border-radius: 10px;
+      font-size: 16px;
+      font-family: inherit;
+      resize: vertical;
+      min-height: 100px;
+    }
+
+    .prompt-input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .response-section {
+      background: #f7f9fc;
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 20px;
+      display: none;
+    }
+
+    .response-section.show {
+      display: block;
+    }
+
+    .response-title {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 10px;
+    }
+
+    .response-text {
+      color: #666;
+      line-height: 1.6;
+    }
+
+    .error {
+      background: #fee;
+      color: #c33;
+      padding: 15px;
+      border-radius: 10px;
+      margin-top: 20px;
+      display: none;
+    }
+
+    .error.show {
+      display: block;
+    }
+
+    .loading {
+      text-align: center;
+      color: #667eea;
+      padding: 20px;
+      display: none;
+    }
+
+    .loading.show {
+      display: block;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .status-connected {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .status-disconnected {
+      background: #f8d7da;
+      color: #721c24;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🤖 Daydreams AI Service</h1>
+    <p class="subtitle">Pay $5 USDC per request via x402 • Powered by Daydreams Router</p>
+
+    <!-- Wallet Connection Section -->
+    <div class="wallet-section">
+      <div class="wallet-status">
+        <span class="status-badge" id="statusBadge">Not Connected</span>
+      </div>
+      <div id="walletAddress" class="wallet-address" style="display: none;"></div>
+      <button class="btn btn-secondary" id="connectWalletBtn" onclick="connectWallet()">
+        Connect MetaMask Wallet
+      </button>
+      <button class="btn btn-secondary" id="disconnectWalletBtn" onclick="disconnectWallet()" style="display: none;">
+        Disconnect Wallet
+      </button>
+    </div>
+
+    <!-- Payment Section -->
+    <div class="payment-section">
+      <div class="payment-amount">$5.00 USDC</div>
+      <button class="btn" id="payButton" onclick="makePayment()" disabled>
+        Pay $5 & Get AI Response
+      </button>
+    </div>
+
+    <!-- Prompt Section -->
+    <div class="prompt-section">
+      <label style="display: block; margin-bottom: 10px; font-weight: 600; color: #333;">
+        Your Question (Optional):
+      </label>
+      <textarea 
+        class="prompt-input" 
+        id="promptInput" 
+        placeholder="Ask anything... (e.g., What is the capital of France?)"
+      ></textarea>
+    </div>
+
+    <!-- Loading -->
+    <div class="loading" id="loading">
+      Processing payment and AI request...
+    </div>
+
+    <!-- Error -->
+    <div class="error" id="error"></div>
+
+    <!-- Response Section -->
+    <div class="response-section" id="responseSection">
+      <div class="response-title">AI Response:</div>
+      <div class="response-text" id="responseText"></div>
+    </div>
+  </div>
+
+  <script>
+    let connectedWallet = null;
+
+    // Check if MetaMask is installed
+    function checkMetaMask() {
+      if (typeof window.ethereum === 'undefined') {
+        alert('MetaMask is not installed! Please install MetaMask extension.');
+        return false;
+      }
+      return true;
+    }
+
+    // Connect wallet
+    async function connectWallet() {
+      if (!checkMetaMask()) return;
+
+      try {
+        const accounts = await window.ethereum.request({ 
+          method: 'eth_requestAccounts' 
+        });
+        
+        if (accounts.length > 0) {
+          connectedWallet = accounts[0];
+          updateWalletUI();
+        }
+      } catch (error) {
+        console.error('Wallet connection error:', error);
+        showError('Failed to connect wallet: ' + error.message);
+      }
+    }
+
+    // Disconnect wallet
+    function disconnectWallet() {
+      connectedWallet = null;
+      updateWalletUI();
+      document.getElementById('responseSection').classList.remove('show');
+    }
+
+    // Update wallet UI
+    function updateWalletUI() {
+      const statusBadge = document.getElementById('statusBadge');
+      const walletAddress = document.getElementById('walletAddress');
+      const connectBtn = document.getElementById('connectWalletBtn');
+      const disconnectBtn = document.getElementById('disconnectWalletBtn');
+      const payButton = document.getElementById('payButton');
+
+      if (connectedWallet) {
+        statusBadge.textContent = 'Connected';
+        statusBadge.className = 'status-badge status-connected';
+        walletAddress.textContent = connectedWallet;
+        walletAddress.style.display = 'block';
+        connectBtn.style.display = 'none';
+        disconnectBtn.style.display = 'block';
+        payButton.disabled = false;
+      } else {
+        statusBadge.textContent = 'Not Connected';
+        statusBadge.className = 'status-badge status-disconnected';
+        walletAddress.style.display = 'none';
+        connectBtn.style.display = 'block';
+        disconnectBtn.style.display = 'none';
+        payButton.disabled = true;
+      }
+    }
+
+    // Make payment
+    async function makePayment() {
+      if (!connectedWallet) {
+        showError('Please connect your wallet first');
+        return;
+      }
+
+      const prompt = document.getElementById('promptInput').value.trim();
+      const loading = document.getElementById('loading');
+      const error = document.getElementById('error');
+      const responseSection = document.getElementById('responseSection');
+      const responseText = document.getElementById('responseText');
+
+      // Hide previous messages
+      error.classList.remove('show');
+      responseSection.classList.remove('show');
+      loading.classList.add('show');
+
+      try {
+        const response = await fetch('/api/pay', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            wallet: connectedWallet,
+            amount: '5000000', // $5 USDC (6 decimals)
+            prompt: prompt || 'Hello, how are you?',
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Payment failed');
+        }
+
+        // Show success
+        loading.classList.remove('show');
+        
+        if (data.aiResponse && data.aiResponse.text) {
+          responseText.textContent = data.aiResponse.text;
+          responseSection.classList.add('show');
+        }
+
+        console.log('Payment successful:', data);
+      } catch (err) {
+        loading.classList.remove('show');
+        showError(err.message || 'An error occurred');
+      }
+    }
+
+    // Show error
+    function showError(message) {
+      const error = document.getElementById('error');
+      error.textContent = message;
+      error.classList.add('show');
+    }
+
+    // Check if wallet is already connected on page load
+    window.addEventListener('load', async () => {
+      if (checkMetaMask()) {
+        try {
+          const accounts = await window.ethereum.request({ 
+            method: 'eth_accounts' 
+          });
+          if (accounts.length > 0) {
+            connectedWallet = accounts[0];
+            updateWalletUI();
+          }
+        } catch (error) {
+          console.error('Error checking accounts:', error);
+        }
+      }
+    });
+
+    // Listen for account changes
+    if (window.ethereum) {
+      window.ethereum.on('accountsChanged', (accounts) => {
+        if (accounts.length === 0) {
+          disconnectWallet();
+        } else {
+          connectedWallet = accounts[0];
+          updateWalletUI();
+        }
+      });
+    }
+  </script>
+</body>
+</html>
+
