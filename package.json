@@ -2,15 +2,24 @@
   "name": "daydreams-x402-router",
   "version": "1.0.0",
   "private": true,
-  "type": "module",
   "scripts": {
-    "dev": "tsx watch api/pay.ts",
-    "start": "tsx api/pay.ts"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@rainbow-me/rainbowkit": "^2.2.9",
+    "@tanstack/react-query": "^5.62.2",
+    "next": "^14.2.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "wagmi": "^2.16.3",
+    "viem": "^2.21.17"
+  },
   "devDependencies": {
     "@types/node": "^22.7.5",
-    "@vercel/node": "^3.2.20",
-    "tsx": "^4.19.2"
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^5.6.3"
   }
 }
