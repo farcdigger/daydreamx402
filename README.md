@@ -38,9 +38,9 @@ X402_FACILITATOR_URL=https://x402.org/api/v1
 # Network
 NETWORK=base  # or base-sepolia for testing
 
-# Daydreams Router (optional)
-DAYDREAMS_API_KEY=your_api_key_here
-DAYDREAMS_NETWORK=base  # or base-sepolia for testing
+# Daydreams Router (required for AI service)
+SELLER_PRIVATE_KEY=0x...  # Private key of seller wallet for Daydreams Router auth
+PAYMENT_AMOUNT_PER_REQUEST=100000  # $0.10 USDC per AI request (in 6-decimal units)
 ```
 
 ## Setup Instructions
@@ -59,6 +59,8 @@ Copy `.env.example` to `.env` and fill in your values:
 
 - `X402_FACILITATOR_URL`: x402 facilitator API endpoint (default: https://x402.org/api/v1)
 - `NETWORK`: Network to use (`base` for mainnet, `base-sepolia` for testing)
+- `SELLER_PRIVATE_KEY`: Private key of seller wallet for Daydreams Router authentication
+- `PAYMENT_AMOUNT_PER_REQUEST`: Amount per AI request in USDC (6-decimal units, default: 100000 = $0.10)
 
 ### 4. Run Locally
 
@@ -87,7 +89,7 @@ Purchase PAYX tokens using USDC via x402 payment protocol.
 {
   "wallet": "0x...",
   "amount": "1.0",
-  "signature": "0x..."  // Optional: for payment verification
+  "prompt": "What is the capital of France?"  // Optional: AI prompt for Daydreams Router
 }
 ```
 
@@ -99,9 +101,15 @@ Purchase PAYX tokens using USDC via x402 payment protocol.
   "transactionHash": "0x...",
   "usdcPaid": "1.0",
   "network": "base",
-  "verifiedAt": "2025-01-30T12:00:00.000Z"
+  "verifiedAt": "2025-01-30T12:00:00.000Z",
+  "aiResponse": {
+    "text": "The capital of France is Paris.",
+    "model": "google-vertex/gemini-2.5-flash"
+  }
 }
 ```
+
+Note: `aiResponse` is only included if `prompt` was provided in the request and Daydreams Router is configured.
 
 **Payment Required (402):**
 ```json
@@ -122,31 +130,35 @@ Purchase PAYX tokens using USDC via x402 payment protocol.
 
 ## x402 Middleware Flow
 
-1. **Request Received**: User sends POST /api/pay with wallet and amount
+1. **Request Received**: User sends POST /api/pay with wallet, amount, and optional prompt
 2. **Payment Check**: Middleware verifies payment via x402 facilitator
 3. **402 Status**: If payment not found, return 402 Payment Required with facilitator URL
 4. **Payment Verified**: x402 facilitator confirms USDC payment on Base
-5. **Response**: Return success with transaction hash and payment details
+5. **Daydreams Router**: If prompt provided, route AI request through Daydreams Router with x402 payment
+6. **Response**: Return success with transaction hash, payment details, and optional AI response
 
 ## Daydreams Router Integration
 
-After successful payment, users can optionally access AI services:
+The system automatically routes AI requests through Daydreams Router after payment verification:
 
-```typescript
-import { createDreamsRouterAuth } from "@daydreamsai/ai-sdk-provider";
-import { privateKeyToAccount } from "viem/accounts";
-
-// Initialize router with payment verification
-const { dreamsRouter } = await createDreamsRouterAuth(
-  privateKeyToAccount(DISTRIBUTOR_PRIVATE_KEY),
-  {
-    payments: {
-      amount: "0", // Already paid via x402
-      network: "base",
-    },
-  }
-);
+**Flow:**
 ```
+Your App → POST /api/pay (with prompt)
+            ↓
+         x402 Payment Verification
+            ↓
+         Dreams Router → Provider (Google/OpenAI/etc)
+            ↓
+         Response with AI answer
+```
+
+**Configuration:**
+- `SELLER_PRIVATE_KEY`: Wallet private key for Daydreams Router authentication
+- `PAYMENT_AMOUNT_PER_REQUEST`: Amount charged per AI request (default: $0.10 USDC)
+- Model: `google-vertex/gemini-2.5-flash` (default, configurable)
+
+**Usage:**
+Include a `prompt` field in your POST request to receive an AI response after payment verification.
 
 ## Payment Verification Logic
 

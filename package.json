@@ -10,6 +10,7 @@
   "dependencies": {
     "@daydreamsai/ai-sdk-provider": "^0.1.0",
     "@daydreamsai/core": "^0.1.0",
+    "viem": "^2.21.17",
     "dotenv": "^16.4.5",
     "tsx": "^4.19.2"
   },

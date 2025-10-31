@@ -1,12 +1,22 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { createDreamsRouterAuth } from "@daydreamsai/ai-sdk-provider";
+import { createDreams, LogLevel } from "@daydreamsai/core";
+import { privateKeyToAccount } from "viem/accounts";
 
 // Environment validation
 const X402_FACILITATOR_URL = process.env.X402_FACILITATOR_URL || "https://x402.org/api/v1";
 const NETWORK = process.env.NETWORK || "base";
+const SELLER_PRIVATE_KEY = process.env.SELLER_PRIVATE_KEY as `0x${string}`;
+const PAYMENT_AMOUNT_PER_REQUEST = process.env.PAYMENT_AMOUNT_PER_REQUEST || "100000"; // $0.10 USDC in 6-decimal units
+
+if (!SELLER_PRIVATE_KEY) {
+  console.warn("Warning: SELLER_PRIVATE_KEY not set. Daydreams Router integration will not work.");
+}
 
 interface PaymentRequest {
   wallet: `0x${string}`;
   amount: string;
+  prompt?: string; // Optional AI prompt for Daydreams Router
   signature?: `0x${string}`;
 }
 
@@ -108,7 +118,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Payment verified - return success
+    // Payment verified - proceed with Daydreams Router AI request
+    let aiResponse = null;
+    
+    if (SELLER_PRIVATE_KEY) {
+      try {
+        const { prompt } = req.body as PaymentRequest;
+        
+        // Initialize Daydreams Router with x402 payment
+        const account = privateKeyToAccount(SELLER_PRIVATE_KEY);
+        const { dreamsRouter, user } = await createDreamsRouterAuth(account, {
+          payments: {
+            amount: PAYMENT_AMOUNT_PER_REQUEST, // Amount per AI request
+            network: NETWORK === "base" ? "base" : "base-sepolia",
+          },
+        });
+
+        // Create Dreams agent with router
+        const agent = createDreams({
+          logLevel: LogLevel.ERROR,
+          model: dreamsRouter("google-vertex/gemini-2.5-flash"),
+        });
+
+        // Execute AI request if prompt provided
+        if (prompt && prompt.trim()) {
+          const response = await agent.complete(prompt);
+          aiResponse = {
+            text: response.outputText || "",
+            model: "google-vertex/gemini-2.5-flash",
+          };
+        }
+      } catch (aiError: any) {
+        console.error("Daydreams Router error:", aiError);
+        // Continue with payment verification success even if AI fails
+      }
+    }
+
+    // Return success with optional AI response
     return res.status(200).json({
       status: "success",
       message: "Payment verified successfully",
@@ -116,6 +162,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       usdcPaid: amount,
       network: NETWORK,
       verifiedAt: new Date().toISOString(),
+      ...(aiResponse && { aiResponse }),
     });
   } catch (error: any) {
     console.error("Payment endpoint error:", error);
