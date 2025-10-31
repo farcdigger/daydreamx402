@@ -9,12 +9,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   return res.status(200).json({
     status: "ok",
-    service: "Daydreams Router + x402 Payment API",
+    service: "Token Presale Payment API",
     endpoints: {
       "/api": "This endpoint (API info)",
-      "/api/pay": "POST - AI service with x402 payment",
+      "/api/pay": "POST - $5 USDC payment for token presale",
     },
-    documentation: "https://docs.daydreams.systems/docs/router",
   });
 }
 

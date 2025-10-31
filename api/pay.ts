@@ -1,29 +1,18 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createDreamsRouterAuth } from "@daydreamsai/ai-sdk-provider";
-import { createDreams, LogLevel } from "@daydreamsai/core";
-import { privateKeyToAccount } from "viem/accounts";
 
 // Environment variables
-const SELLER_PRIVATE_KEY = process.env.SELLER_PRIVATE_KEY as `0x${string}`;
 const PAYMENT_AMOUNT = process.env.PAYMENT_AMOUNT || "5000000"; // $5 USDC (6 decimals: 5000000)
 const NETWORK_ENV = process.env.NETWORK || "base";
-const NETWORK = (NETWORK_ENV === "base" || NETWORK_ENV === "base-sepolia" 
-  ? NETWORK_ENV 
-  : "base") as "base" | "base-sepolia";
-
-if (!SELLER_PRIVATE_KEY) {
-  console.warn("Warning: SELLER_PRIVATE_KEY not set. Payments will not work.");
-}
+const SELLER_WALLET = process.env.SELLER_WALLET as `0x${string}` || "0x6a40e304193d2BD3fa7479c35a45bA4CCDBb4683"; // Payment recipient
 
 interface PaymentRequest {
   wallet: `0x${string}`;
   amount?: string;
-  prompt?: string;
 }
 
 /**
- * Payment endpoint with wallet verification and AI service
- * User connects wallet (MetaMask), pays $5 USDC, then gets AI response
+ * Token Presale Payment Endpoint
+ * User connects MetaMask wallet and pays $5 USDC for token presale
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS headers
@@ -40,7 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { wallet, amount, prompt } = req.body as PaymentRequest;
+    const { wallet, amount } = req.body as PaymentRequest;
 
     // Validate wallet
     if (!wallet || typeof wallet !== "string") {
@@ -65,46 +54,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    if (!SELLER_PRIVATE_KEY) {
-      return res.status(500).json({
-        error: "Server configuration error: SELLER_PRIVATE_KEY not set",
-      });
-    }
+    // Payment amount in USD
+    const paymentAmountUSD = (parseInt(paymentAmount) / 1000000).toFixed(2);
 
-    // Initialize Daydreams Router with x402 payment
-    const account = privateKeyToAccount(SELLER_PRIVATE_KEY);
-    const sellerWalletAddress = account.address;
-    
-    const { dreamsRouter, user } = await createDreamsRouterAuth(account, {
-      payments: {
-        amount: paymentAmount, // Amount in 6-decimal USDC units
-        network: NETWORK,
-      },
-    });
-
-    // Create Dreams agent
-    const agent = createDreams({
-      logLevel: LogLevel.ERROR,
-      model: dreamsRouter("google-vertex/gemini-2.5-flash"),
-    });
-
-    // Execute AI request with default prompt (triggers x402 payment)
-    const defaultPrompt = "Hello! This is a test payment via x402.";
-    const response = await agent.complete(defaultPrompt);
+    // TODO: Here you would verify the actual USDC payment on-chain
+    // For now, we just record the payment request
     
     return res.status(200).json({
       status: "success",
-      message: "Payment processed successfully",
+      message: "Payment request recorded successfully",
       wallet,
       paymentAmount,
-      paymentAmountUSD: (parseInt(paymentAmount) / 1000000).toFixed(2),
-      paymentRecipient: sellerWalletAddress,
-      network: NETWORK,
-      userBalance: user.balance,
-      aiResponse: {
-        text: response.outputText || "",
-        model: "google-vertex/gemini-2.5-flash",
-      },
+      paymentAmountUSD,
+      paymentRecipient: SELLER_WALLET,
+      network: NETWORK_ENV,
+      timestamp: new Date().toISOString(),
+      note: "Actual on-chain payment verification should be implemented here",
     });
   } catch (error: any) {
     console.error("Payment endpoint error:", error);

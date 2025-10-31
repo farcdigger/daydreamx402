@@ -7,11 +7,7 @@
     "dev": "tsx watch api/pay.ts",
     "start": "tsx api/pay.ts"
   },
-  "dependencies": {
-    "@daydreamsai/ai-sdk-provider": "^0.1.0",
-    "@daydreamsai/core": "^0.1.0",
-    "viem": "^2.21.17"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/node": "^22.7.5",
     "@vercel/node": "^3.2.20",

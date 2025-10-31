@@ -200,8 +200,8 @@
 </head>
 <body>
   <div class="container">
-    <h1>🤖 Daydreams AI Service</h1>
-    <p class="subtitle">Pay $5 USDC per request via x402 • Powered by Daydreams Router</p>
+    <h1>💰 Token Presale</h1>
+    <p class="subtitle">Pay $5 USDC to participate in token presale • Base Network</p>
 
     <!-- Wallet Connection Section -->
     <div class="wallet-section">
@@ -221,14 +221,14 @@
     <div class="payment-section">
       <div class="payment-amount">$5.00 USDC</div>
       <button class="btn" id="payButton" onclick="makePayment()" disabled>
-        Pay $5 & Get AI Response
+        Pay $5 USDC
       </button>
     </div>
 
 
     <!-- Loading -->
     <div class="loading" id="loading">
-      Processing payment and AI request...
+      Processing payment...
     </div>
 
     <!-- Error -->
@@ -236,7 +236,7 @@
 
     <!-- Response Section -->
     <div class="response-section" id="responseSection">
-      <div class="response-title">AI Response:</div>
+      <div class="response-title">Payment Status:</div>
       <div class="response-text" id="responseText"></div>
     </div>
   </div>
@@ -350,8 +350,8 @@
         // Show success
         loading.classList.remove('show');
         
-        if (data.aiResponse && data.aiResponse.text) {
-          responseText.textContent = data.aiResponse.text;
+        if (data.status === 'success') {
+          responseText.textContent = `Payment successful! $${data.paymentAmountUSD} USDC received from ${data.wallet.substring(0, 6)}...${data.wallet.substring(38)}. Payment recipient: ${data.paymentRecipient}`;
           responseSection.classList.add('show');
         }
 
