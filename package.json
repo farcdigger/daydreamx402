@@ -1,22 +1,20 @@
 {
-  "name": "payx-token-sale",
-  "version": "0.1.0",
+  "name": "daydreams-x402-router",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch api/index.ts",
-    "start": "tsx api/index.ts"
+    "dev": "tsx watch api/pay.ts",
+    "start": "tsx api/pay.ts"
   },
   "dependencies": {
     "@daydreamsai/ai-sdk-provider": "^0.1.0",
     "@daydreamsai/core": "^0.1.0",
-    "viem": "^2.21.17",
-    "dotenv": "^16.4.5",
-    "tsx": "^4.19.2"
+    "viem": "^2.21.17"
   },
   "devDependencies": {
     "@types/node": "^22.7.5",
-    "@vercel/node": "^3.2.20"
+    "@vercel/node": "^3.2.20",
+    "tsx": "^4.19.2"
   }
 }
-
