@@ -1,29 +1,29 @@
-# Token Presale - Base Network
+# Token Presale API - Hono Backend
 
-Token presale payment system with RainbowKit wallet connection and USDC payments on Base network.
+x402 payment API for token presale using Dreams Router, built with Hono.
 
 ## Overview
 
-Users connect their wallet via RainbowKit, pay $5 USDC, and participate in the token presale. Payments are processed on Base mainnet.
+Backend API for processing x402 payments via Dreams Router on Base network. Returns 402 Payment Required when payment is needed, verifies payments when X-Payment header is provided.
 
 ## Features
 
-- **RainbowKit Integration**: Professional wallet connection UI supporting multiple wallets
-- **Base Network**: USDC payments on Base mainnet
-- **Wagmi + Viem**: Type-safe Ethereum interactions
-- **Next.js 14**: Modern React framework with App Router
+- **Hono Framework**: Fast, lightweight web framework
+- **x402 Payments**: USDC micropayments via Dreams Router
+- **Base Network**: Payments processed on Base mainnet
+- **Vercel Serverless**: Deploy to Vercel as serverless function
 
 ## Quick Start
 
 ### 1. Install Dependencies
 
 ```bash
-npm install
+bun install
 ```
 
 ### 2. Environment Variables
 
-Create `.env.local` file:
+Create `.env` file:
 
 ```env
 # Dreams Router Configuration (required - one of the following)
@@ -37,17 +37,18 @@ SELLER_PRIVATE_KEY=0x... # Private key of seller wallet for x402 payments
 PAYMENT_AMOUNT=5000000 # $5 USDC (6 decimals)
 NETWORK=base # Base network for payments (base or base-sepolia)
 
-# Note: Get Dreams Router API key from https://router.daydreams.systems
-# Note: No WalletConnect Project ID needed - Using MetaMask only
+# Optional
+ROUTER_API_URL=https://router.daydreams.systems/v1/chat/completions
+PORT=3000
 ```
 
 ### 3. Run Locally
 
 ```bash
-npm run dev
+bun run dev
 ```
 
-Visit http://localhost:3000
+Server will start on http://localhost:3000
 
 ### 4. Deploy to Vercel
 
@@ -59,72 +60,81 @@ Visit http://localhost:3000
    - `NETWORK` (optional, defaults to "base" - use "base" for mainnet or "base-sepolia" for testnet)
 3. Deploy automatically
 
-## How It Works (x402 Payment Flow)
-
-1. **User visits site** → RainbowKit wallet selector appears
-2. **User connects wallet** → MetaMask (browser extension)
-3. **User clicks "Pay $5 USDC"** → Frontend sends request to backend
-4. **Backend checks x402 payment** → Returns 402 Payment Required if no payment headers
-5. **Backend initiates x402 payment via Dreams Router** → Server-side only:
-   - Backend uses `createDreamsRouter.evm()` with seller's private key
-   - Makes AI call via `generateText()` with Dreams Router model
-   - x402 facilitator automatically processes payment
-   - Client receives 402 response
-6. **Client completes payment** → Direct USDC transfer (x402 handled backend)
-7. **Backend verifies payment** → Payment recorded
-8. **Success** → Payment confirmed and registered
-
-**Note:** Dreams SDK runs only server-side (Node.js required). Client-side uses direct USDC transfer when 402 received.
-
-## Tech Stack
-
-- **Next.js 14**: React framework with App Router
-- **RainbowKit**: Wallet connection UI
-- **Wagmi**: React Hooks for Ethereum
-- **Viem**: TypeScript Ethereum library
-- **Base Network**: Layer 2 for payments
-- **Daydreams Router**: x402 payment protocol integration (server-side only)
-  - `@daydreamsai/ai-sdk-provider`: Dreams Router provider for Vercel AI SDK
-  - `ai` (Vercel AI SDK): AI model calls with x402 payments
-  - `x402`: x402 payment protocol
-
-## Payment Details
-
-- **Amount**: $5 USDC
-- **Network**: Base mainnet
-- **USDC Contract**: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
-- **Recipient**: `0x6a40e304193d2BD3fa7479c35a45bA4CCDBb4683`
-
 ## API Endpoints
 
-### POST /api/pay
+### GET /health
 
-Register a payment transaction.
-
-**Request:**
-```json
-{
-  "wallet": "0x...",
-  "amount": "5000000",
-  "transactionHash": "0x..."
-}
-```
+Health check endpoint.
 
 **Response:**
 ```json
 {
-  "status": "success",
-  "wallet": "0x...",
-  "paymentAmount": "5000000",
-  "paymentAmountUSD": "5.00",
-  "paymentRecipient": "0x...",
-  "transactionHash": "0x...",
-  "timestamp": "..."
+  "status": "ok",
+  "timestamp": "2024-01-01T00:00:00.000Z",
+  "network": "base"
 }
 ```
 
-## References
+### POST /pay
 
-- [RainbowKit Documentation](https://rainbowkit.com/tr/docs/installation)
-- [Wagmi Documentation](https://wagmi.sh)
-- [Base Network](https://base.org)
+x402 payment endpoint per [Quickstart](https://docs.daydreams.systems/docs/router/quickstart).
+
+**Request Headers (Optional):**
+- `X-Payment`: x402 payment header (if payment already completed)
+
+**Request Body (Optional):**
+```json
+{
+  "wallet": "0x...",
+  "amount": "5000000"
+}
+```
+
+**Response 402 (Payment Required):**
+```json
+{
+  "error": "Payment required",
+  "message": "x402 payment required. Complete payment and retry with X-Payment header.",
+  "x402Payment": true,
+  "network": "base",
+  "amount": "5000000"
+}
+```
+
+**Response 200 (Success):**
+```json
+{
+  "status": "success",
+  "message": "x402 payment verified and recorded successfully",
+  "x402Payment": true,
+  "network": "base",
+  "amount": "5000000",
+  "timestamp": "2024-01-01T00:00:00.000Z"
+}
+```
+
+## How It Works (x402 Payment Flow)
+
+1. **Client requests payment** → `POST /pay` without X-Payment header
+2. **Server checks payment** → If no header, generates x402 payment header or uses API key
+3. **Server calls Router API** → `https://router.daydreams.systems/v1/chat/completions`
+4. **Router returns 402** → Server returns 402 to client
+5. **Client generates payment** → Uses `generateX402PaymentBrowser` (Quickstart guide)
+6. **Client retries with header** → `POST /pay` with `X-Payment` header
+7. **Server verifies** → Calls Router API with X-Payment header
+8. **Success** → Payment verified and recorded
+
+## Technology Stack
+
+- **Hono**: Web framework
+- **@daydreamsai/ai-sdk-provider**: x402 payment generation
+- **viem**: Ethereum library for account management
+- **Bun**: Runtime (or Node.js via Vercel)
+
+## API Documentation
+
+See [Dreams Router Quickstart](https://docs.daydreams.systems/docs/router/quickstart) for x402 payment details.
+
+## License
+
+MIT

@@ -3,27 +3,20 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start"
+    "dev": "bun run src/index.ts",
+    "build": "tsc",
+    "start": "bun run src/index.ts"
   },
   "dependencies": {
     "@daydreamsai/ai-sdk-provider": "^0.1.5",
     "@daydreamsai/core": "^0.3.22",
-    "@rainbow-me/rainbowkit": "^2.2.9",
-    "@tanstack/react-query": "^5.62.2",
-    "ai": "^5.0.85",
-    "next": "^14.2.5",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
+    "@hono/node-server": "^1.13.0",
+    "hono": "^4.6.3",
     "viem": "^2.21.17",
-    "wagmi": "^2.16.3",
     "x402": "^0.7.1"
   },
   "devDependencies": {
     "@types/node": "^22.7.5",
-    "@types/react": "^18.3.5",
-    "@types/react-dom": "^18.3.0",
     "typescript": "^5.6.3"
   }
 }

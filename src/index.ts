@@ -1,20 +1,30 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { Hono, Context } from 'hono';
+import { cors } from 'hono/cors';
 import { generateX402Payment } from '@daydreamsai/ai-sdk-provider';
 import { privateKeyToAccount } from 'viem/accounts';
+
+// Type definitions
+declare const Bun: any;
+declare const fetch: typeof globalThis.fetch;
 
 // Payment config per Quickstart: https://docs.daydreams.systems/docs/router/quickstart
 const NETWORK_ENV = process.env.NETWORK || "base";
 const PAYMENT_AMOUNT = process.env.PAYMENT_AMOUNT || "5000000"; // $5 USDC (6 decimals)
 const SELLER_PRIVATE_KEY = process.env.SELLER_PRIVATE_KEY as `0x${string}`;
 const DREAMSROUTER_API_KEY = process.env.DREAMSROUTER_API_KEY;
-// Router API URL - check Quickstart docs for correct endpoint
-// Quickstart shows: https://router.daydreams.systems/v1/chat/completions
-// But models endpoint uses: https://api-beta.daydreams.systems/v1/models
-// Try router.daydreams.systems first, fallback to api-beta if needed
+// Router API URL - try router.daydreams.systems first, fallback to api-beta if 404
 const ROUTER_API_URL = process.env.ROUTER_API_URL || 'https://router.daydreams.systems/v1/chat/completions';
 
+const app = new Hono();
+
+// CORS middleware
+app.use('/*', cors({
+  origin: '*',
+  allowMethods: ['GET', 'POST', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'X-Payment', 'x-payment', 'Authorization'],
+}));
+
 // Generate x402 payment header per Quickstart guide
-// https://docs.daydreams.systems/docs/router/quickstart
 async function generatePaymentHeader() {
   if (!SELLER_PRIVATE_KEY) {
     console.error('SELLER_PRIVATE_KEY is required for x402 payments');
@@ -39,58 +49,67 @@ async function generatePaymentHeader() {
   }
 }
 
-// x402 Payment Flow per Quickstart: https://docs.daydreams.systems/docs/router/quickstart
-// 1. Generate X-Payment header using generateX402Payment
-// 2. Make request to REST API with X-Payment header
-// 3. If 402 returned, payment required - client completes payment and retries
+// Helper to make Router API request with fallback
+async function fetchRouterAPI(url: string, headers: Record<string, string>, body: any) {
+  let response = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  });
 
-export async function POST(req: NextRequest) {
+  // If 404, try api-beta endpoint
+  if (response.status === 404 && url.includes('router.daydreams.systems')) {
+    console.log('404 on router.daydreams.systems, trying api-beta.daydreams.systems');
+    const betaUrl = url.replace('router.daydreams.systems', 'api-beta.daydreams.systems');
+    response = await fetch(betaUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+  }
+
+  return response;
+}
+
+// Health check endpoint
+app.get('/health', (c: Context) => {
+  return c.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    network: NETWORK_ENV,
+  });
+});
+
+// x402 Payment endpoint
+// POST /pay
+app.post('/pay', async (c: Context) => {
   try {
     // Check if client sent X-Payment header (payment already completed)
-    const clientPaymentHeader = req.headers.get('X-Payment') || req.headers.get('x-payment');
+    const clientPaymentHeader = c.req.header('X-Payment') || c.req.header('x-payment');
     
     if (clientPaymentHeader) {
       console.log('Client provided X-Payment header - verifying payment with Router');
       
       // Make request to Router API with client's payment header
       try {
-        // Try router.daydreams.systems first
-        let routerResponse = await fetch(ROUTER_API_URL, {
-          method: 'POST',
-          headers: {
+        const routerResponse = await fetchRouterAPI(
+          ROUTER_API_URL,
+          {
             'Content-Type': 'application/json',
             'X-Payment': clientPaymentHeader,
           },
-          body: JSON.stringify({
+          {
             model: 'google-vertex/gemini-2.5-flash',
             messages: [{ role: 'user', content: 'Token presale payment confirmation' }],
             stream: false,
-          }),
-        });
-
-        // If 404, try api-beta endpoint
-        if (routerResponse.status === 404 && ROUTER_API_URL.includes('router.daydreams.systems')) {
-          console.log('404 on router.daydreams.systems, trying api-beta.daydreams.systems');
-          const betaUrl = ROUTER_API_URL.replace('router.daydreams.systems', 'api-beta.daydreams.systems');
-          routerResponse = await fetch(betaUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Payment': clientPaymentHeader,
-            },
-            body: JSON.stringify({
-              model: 'google-vertex/gemini-2.5-flash',
-              messages: [{ role: 'user', content: 'Token presale payment confirmation' }],
-              stream: false,
-            }),
-          });
-        }
+          }
+        );
 
         if (routerResponse.ok) {
           const data = await routerResponse.json();
           console.log('Payment verified successfully with Router');
           
-          return NextResponse.json({
+          return c.json({
             status: "success",
             message: "x402 payment verified and recorded successfully",
             x402Payment: true,
@@ -100,13 +119,13 @@ export async function POST(req: NextRequest) {
           });
         } else if (routerResponse.status === 402) {
           // Still 402 - payment not completed yet
-          return NextResponse.json(
+          return c.json(
             {
               error: "Payment required",
               message: "Payment not yet completed. Please complete payment and retry.",
               x402Payment: true,
             },
-            { status: 402 }
+            402
           );
         } else {
           const errorText = await routerResponse.text();
@@ -114,12 +133,12 @@ export async function POST(req: NextRequest) {
         }
       } catch (routerError: any) {
         console.error('Router API verification error:', routerError);
-        return NextResponse.json(
+        return c.json(
           {
             error: "Payment verification failed",
             message: routerError?.message || "Failed to verify payment with Router",
           },
-          { status: 500 }
+          500
         );
       }
     }
@@ -132,41 +151,22 @@ export async function POST(req: NextRequest) {
       console.log('Using API key auth');
       
       try {
-        // Try router.daydreams.systems first
-        let routerResponse = await fetch(ROUTER_API_URL, {
-          method: 'POST',
-          headers: {
+        const routerResponse = await fetchRouterAPI(
+          ROUTER_API_URL,
+          {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${DREAMSROUTER_API_KEY}`,
           },
-          body: JSON.stringify({
+          {
             model: 'google-vertex/gemini-2.5-flash',
             messages: [{ role: 'user', content: 'Token presale payment confirmation' }],
             stream: false,
-          }),
-        });
-
-        // If 404, try api-beta endpoint
-        if (routerResponse.status === 404 && ROUTER_API_URL.includes('router.daydreams.systems')) {
-          console.log('404 on router.daydreams.systems, trying api-beta.daydreams.systems');
-          const betaUrl = ROUTER_API_URL.replace('router.daydreams.systems', 'api-beta.daydreams.systems');
-          routerResponse = await fetch(betaUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${DREAMSROUTER_API_KEY}`,
-            },
-            body: JSON.stringify({
-              model: 'google-vertex/gemini-2.5-flash',
-              messages: [{ role: 'user', content: 'Token presale payment confirmation' }],
-              stream: false,
-            }),
-          });
-        }
+          }
+        );
 
         if (routerResponse.ok) {
           const data = await routerResponse.json();
-          return NextResponse.json({
+          return c.json({
             status: "success",
             message: "Payment processed successfully (API key auth)",
             x402Payment: false,
@@ -176,7 +176,7 @@ export async function POST(req: NextRequest) {
           // 402 Payment Required - need x402 payment
           const x402Header = routerResponse.headers.get('x-402-payment');
           
-          return NextResponse.json(
+          return c.json(
             {
               error: "Payment required",
               message: "x402 payment required. Use generateX402PaymentBrowser in client.",
@@ -184,10 +184,7 @@ export async function POST(req: NextRequest) {
               network: NETWORK_ENV,
               amount: PAYMENT_AMOUNT,
             },
-            { 
-              status: 402,
-              headers: x402Header ? { 'x-402-payment': x402Header } : {},
-            }
+            402
           );
         } else {
           const errorText = await routerResponse.text();
@@ -195,35 +192,35 @@ export async function POST(req: NextRequest) {
         }
       } catch (routerError: any) {
         console.error('Router API error:', routerError);
-        return NextResponse.json(
+        return c.json(
           {
             error: "Router API error",
             message: routerError?.message || "Failed to communicate with Router",
           },
-          { status: 500 }
+          500
         );
       }
     }
     
     // Option 2: Generate x402 payment header and make request
     if (!SELLER_PRIVATE_KEY) {
-      return NextResponse.json(
+      return c.json(
         { 
           error: "Payment gateway not configured.",
           message: "Missing DREAMSROUTER_API_KEY or SELLER_PRIVATE_KEY. Get API key from https://router.daydreams.systems",
         },
-        { status: 500 }
+        500
       );
     }
 
     const paymentHeader = await generatePaymentHeader();
     if (!paymentHeader) {
-      return NextResponse.json(
+      return c.json(
         {
           error: "Failed to generate payment header",
           message: "Could not generate x402 payment header",
         },
-        { status: 500 }
+        500
       );
     }
 
@@ -231,43 +228,24 @@ export async function POST(req: NextRequest) {
     
     // Make request with X-Payment header per Quickstart
     try {
-      // Try router.daydreams.systems first
-      let routerResponse = await fetch(ROUTER_API_URL, {
-        method: 'POST',
-        headers: {
+      const routerResponse = await fetchRouterAPI(
+        ROUTER_API_URL,
+        {
           'Content-Type': 'application/json',
           'X-Payment': paymentHeader, // x402-compliant payment
         },
-        body: JSON.stringify({
+        {
           model: 'google-vertex/gemini-2.5-flash',
           messages: [{ role: 'user', content: 'Token presale payment confirmation' }],
           stream: false,
-        }),
-      });
-
-      // If 404, try api-beta endpoint
-      if (routerResponse.status === 404 && ROUTER_API_URL.includes('router.daydreams.systems')) {
-        console.log('404 on router.daydreams.systems, trying api-beta.daydreams.systems');
-        const betaUrl = ROUTER_API_URL.replace('router.daydreams.systems', 'api-beta.daydreams.systems');
-        routerResponse = await fetch(betaUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Payment': paymentHeader,
-          },
-          body: JSON.stringify({
-            model: 'google-vertex/gemini-2.5-flash',
-            messages: [{ role: 'user', content: 'Token presale payment confirmation' }],
-            stream: false,
-          }),
-        });
-      }
+        }
+      );
 
       if (routerResponse.ok) {
         const data = await routerResponse.json();
         console.log('Payment successful via Router API');
         
-        return NextResponse.json({
+        return c.json({
           status: "success",
           message: "x402 payment processed successfully",
           x402Payment: true,
@@ -279,7 +257,7 @@ export async function POST(req: NextRequest) {
         // Still 402 - payment needs to be completed
         const x402Header = routerResponse.headers.get('x-402-payment');
         
-        return NextResponse.json(
+        return c.json(
           {
             error: "Payment required",
             message: "x402 payment required. Complete payment and retry with X-Payment header.",
@@ -287,10 +265,7 @@ export async function POST(req: NextRequest) {
             network: NETWORK_ENV,
             amount: PAYMENT_AMOUNT,
           },
-          { 
-            status: 402,
-            headers: x402Header ? { 'x-402-payment': x402Header } : {},
-          }
+          402
         );
       } else {
         const errorText = await routerResponse.text();
@@ -298,35 +273,44 @@ export async function POST(req: NextRequest) {
       }
     } catch (routerError: any) {
       console.error('Router API error:', routerError);
-      return NextResponse.json(
+      return c.json(
         {
           error: "Payment gateway error",
           message: routerError?.message || "Failed to process payment via Router API",
           details: routerError?.stack?.substring(0, 300) || "Unknown error",
         },
-        { status: 500 }
+        500
       );
     }
   } catch (error: any) {
     console.error("Payment endpoint error:", error);
-    return NextResponse.json(
+    return c.json(
       {
         error: error?.message || "Internal server error",
         details: error?.stack?.substring(0, 200) || "Unknown error",
       },
-      { status: 500 }
+      500
     );
   }
-}
+});
 
-export async function OPTIONS() {
-  return new NextResponse(null, {
-    status: 200,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, X-Payment, x-payment, Authorization',
-    },
+// Export for Vercel serverless
+export default app;
+
+// For local development
+if (typeof Bun !== 'undefined') {
+  // Bun runtime
+  const port = process.env.PORT || 3000;
+  Bun.serve({
+    port,
+    fetch: app.fetch,
   });
+  console.log(`Server running on http://localhost:${port}`);
+} else if (typeof process !== 'undefined') {
+  // Node.js runtime
+  const port = process.env.PORT || 3000;
+  // Node.js serverless (Vercel) - export default app is enough
+  if (!process.env.VERCEL) {
+    console.log(`For Node.js, use a compatible runtime or deploy to Vercel`);
+  }
 }
-
