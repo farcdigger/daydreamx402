@@ -26,13 +26,19 @@ npm install
 Create `.env.local` file:
 
 ```env
-# x402 Payment Configuration (required)
+# Dreams Router Configuration (required - one of the following)
+# Option 1: API Key (recommended - get from https://router.daydreams.systems)
+DREAMSROUTER_API_KEY=your_api_key_here
+
+# Option 2: EVM Private Key (alternative)
 SELLER_PRIVATE_KEY=0x... # Private key of seller wallet for x402 payments
+
+# Payment Configuration
 SELLER_WALLET=0x6a40e304193d2BD3fa7479c35a45bA4CCDBb4683
 PAYMENT_AMOUNT=5000000 # $5 USDC (6 decimals)
 NETWORK=base # Base network for payments
 
-# Note: No OpenAI API key needed - Dreams Router handles models internally
+# Note: Get Dreams Router API key from https://router.daydreams.systems
 # Note: No WalletConnect Project ID needed - Using MetaMask only
 ```
 
@@ -48,7 +54,8 @@ Visit http://localhost:3000
 
 1. Connect your GitHub repository to Vercel
 2. Set environment variables in Vercel dashboard:
-   - `SELLER_PRIVATE_KEY` (required for x402 payments)
+   - `DREAMSROUTER_API_KEY` (required - get from https://router.daydreams.systems) **OR**
+   - `SELLER_PRIVATE_KEY` (alternative - private key of seller wallet)
    - `SELLER_WALLET` (optional, defaults to provided address)
    - `PAYMENT_AMOUNT` (optional, defaults to 5000000)
    - `NETWORK` (optional, defaults to "base")

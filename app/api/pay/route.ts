@@ -1,29 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateText } from 'ai';
-import { createEVMAuthFromPrivateKey } from '@daydreamsai/ai-sdk-provider';
+import { createDreamsRouter, createEVMAuthFromPrivateKey } from '@daydreamsai/ai-sdk-provider';
 
 const PAYMENT_AMOUNT = process.env.PAYMENT_AMOUNT || "5000000"; // $5 USDC (6 decimals)
 const NETWORK_ENV = process.env.NETWORK || "base";
 const SELLER_WALLET = process.env.SELLER_WALLET as `0x${string}` || "0x6a40e304193d2BD3fa7479c35a45bA4CCDBb4683";
 const SELLER_PRIVATE_KEY = process.env.SELLER_PRIVATE_KEY as `0x${string}`;
+const DREAMSROUTER_API_KEY = process.env.DREAMSROUTER_API_KEY;
 
 // Cache Dreams Router instance
-let cachedDreamsRouter: Awaited<ReturnType<typeof createEVMAuthFromPrivateKey>>['dreamsRouter'] | null = null;
+let cachedDreamsRouter: ReturnType<typeof createDreamsRouter> | Awaited<ReturnType<typeof createEVMAuthFromPrivateKey>>['dreamsRouter'] | null = null;
 
 // Initialize Dreams Router with x402 payments
 async function getDreamsRouter() {
-  if (!SELLER_PRIVATE_KEY) {
-    console.error('SELLER_PRIVATE_KEY is not set');
-    return null;
-  }
-  
   // Return cached instance if available
   if (cachedDreamsRouter) {
     return cachedDreamsRouter;
   }
   
   try {
-    console.log('Creating Dreams Router with network:', NETWORK_ENV);
+    // Try API key auth first (if available)
+    if (DREAMSROUTER_API_KEY) {
+      console.log('Creating Dreams Router with API key auth');
+      const dreamsRouter = createDreamsRouter({
+        apiKey: DREAMSROUTER_API_KEY,
+      });
+      cachedDreamsRouter = dreamsRouter;
+      console.log('Dreams Router created with API key');
+      return dreamsRouter;
+    }
+    
+    // Fallback to EVM private key auth
+    if (!SELLER_PRIVATE_KEY) {
+      console.error('Neither DREAMSROUTER_API_KEY nor SELLER_PRIVATE_KEY is set');
+      return null;
+    }
+    
+    console.log('Creating Dreams Router with EVM private key, network:', NETWORK_ENV);
     // Use createEVMAuthFromPrivateKey helper as per documentation
     const { dreamsRouter } = await createEVMAuthFromPrivateKey(
       SELLER_PRIVATE_KEY,
@@ -34,7 +47,7 @@ async function getDreamsRouter() {
       }
     );
     cachedDreamsRouter = dreamsRouter;
-    console.log('Dreams Router created successfully');
+    console.log('Dreams Router created with EVM auth');
     return dreamsRouter;
   } catch (error: any) {
     console.error('Failed to create Dreams Router:', error);
@@ -60,7 +73,10 @@ export async function POST(req: NextRequest) {
       const dreamsRouter = await getDreamsRouter();
       if (!dreamsRouter) {
         return NextResponse.json(
-          { error: "Payment gateway not configured. Missing SELLER_PRIVATE_KEY." },
+          { 
+            error: "Payment gateway not configured.",
+            message: "Missing DREAMSROUTER_API_KEY or SELLER_PRIVATE_KEY. Get API key from https://router.daydreams.systems",
+          },
           { status: 500 }
         );
       }
