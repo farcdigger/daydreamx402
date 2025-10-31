@@ -46,29 +46,11 @@ export default function Home() {
       return;
     }
 
-    // Direct USDC transfer - wallet approval will open automatically
-    setPaymentStatus('Initiating payment...');
+    // Step 1: Request x402 payment from backend
+    setPaymentStatus('Initiating x402 payment...');
     
     try {
-      writeContract({
-        address: USDC_ADDRESS,
-        abi: erc20Abi as readonly any[],
-        functionName: 'transfer',
-        args: [RECIPIENT_ADDRESS, PAYMENT_AMOUNT],
-      } as any);
-    } catch (err: any) {
-      setError(err.message || 'Transaction failed');
-      setPaymentStatus(null);
-    }
-  };
-
-  // Handle transaction success - register with backend (with x402 headers if needed)
-  useEffect(() => {
-    if (isConfirmed && hash && address) {
-      setPaymentStatus('Payment successful! Registering...');
-      
-      // Register payment with backend
-      fetch('/api/pay', {
+      const response = await fetch('/api/pay', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -76,29 +58,65 @@ export default function Home() {
         body: JSON.stringify({
           wallet: address,
           amount: '5000000',
-          transactionHash: hash,
         }),
-      })
-        .then(async (res) => {
-          if (res.status === 402) {
-            // If still 402, payment wasn't verified via x402
-            throw new Error('Payment verification failed. Please retry.');
+      });
+
+      if (response.status === 402) {
+        // Backend initiated x402 payment via Dreams Router
+        const data = await response.json();
+        setPaymentStatus('x402 payment required. Processing via Dreams Router...');
+        
+        // x402 payment is being processed by Dreams Router backend
+        // The payment will be completed automatically
+        // Wait a moment then retry the request
+        setTimeout(async () => {
+          try {
+            const retryResponse = await fetch('/api/pay', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                wallet: address,
+                amount: '5000000',
+              }),
+            });
+
+            if (retryResponse.ok) {
+              const retryData = await retryResponse.json();
+              setPaymentStatus(`x402 payment successful! ${retryData.message || ''}`);
+            } else if (retryResponse.status === 402) {
+              // Still 402, payment processing or user needs to complete
+              setPaymentStatus('Waiting for x402 payment confirmation...');
+              setError('Please wait for x402 payment to complete');
+            } else {
+              const errorData = await retryResponse.json();
+              throw new Error(errorData.error || 'x402 payment failed');
+            }
+          } catch (retryErr: any) {
+            setError(retryErr.message || 'x402 payment verification failed');
+            setPaymentStatus(null);
           }
-          if (!res.ok) {
-            const errorText = await res.text();
-            throw new Error(errorText || 'Registration failed');
-          }
-          return res.json();
-        })
-        .then((data) => {
-          setPaymentStatus(`Payment verified and recorded! Transaction: ${hash}`);
-        })
-        .catch((err) => {
-          setError(err.message);
-          setPaymentStatus(null);
-        });
+        }, 3000); // Wait 3 seconds for x402 payment processing
+        
+        return;
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Payment request failed');
+      }
+
+      const data = await response.json();
+      setPaymentStatus(`Payment successful! ${data.message || ''}`);
+    } catch (err: any) {
+      setError(err.message || 'Payment failed');
+      setPaymentStatus(null);
     }
-  }, [isConfirmed, hash, address]);
+  };
+
+  // Note: x402 payment is handled entirely via backend API
+  // No need to register transaction hash separately
 
   return (
     <div style={styles.container}>

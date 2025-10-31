@@ -51,15 +51,19 @@ export async function POST(req: NextRequest) {
       }
 
       // Make AI call via Dreams Router to trigger x402 payment
-      // The payment amount and recipient come automatically from the 402 response
+      // Dreams Router will automatically handle x402 payment flow
+      // The payment amount and recipient come from the Dreams Router 402 response
       try {
+        // This will trigger x402 payment automatically via Dreams Router
+        // The x402 facilitator will process the payment
         const { text } = await generateText({
           model: dreamsRouter('google-vertex/gemini-2.5-flash'),
-          prompt: 'Token presale payment',
+          prompt: 'Token presale payment confirmation',
         });
 
-        // x402 payment is handled automatically by Dreams Router
-        // After payment, retry this request with x402 headers
+        // x402 payment is being processed by Dreams Router
+        // Return 402 with payment details
+        // Client should retry after payment is confirmed
         
         return NextResponse.json(
           {
@@ -67,18 +71,23 @@ export async function POST(req: NextRequest) {
             message: "x402 payment initiated via Dreams Router",
             amount: PAYMENT_AMOUNT,
             network: NETWORK_ENV,
-            note: "Please retry the request after payment confirmation",
+            x402Payment: true,
+            note: "x402 payment is being processed. Please retry after confirmation.",
           },
           { status: 402 }
         );
       } catch (dreamsError: any) {
         console.error('Dreams Router x402 payment error:', dreamsError);
+        
+        // If Dreams Router fails, still return 402 but with error info
         return NextResponse.json(
           {
-            error: "Payment gateway error",
-            message: dreamsError.message || "Failed to initiate x402 payment",
+            error: "Payment required",
+            message: "x402 payment gateway error: " + (dreamsError.message || "Failed to initiate"),
+            amount: PAYMENT_AMOUNT,
+            network: NETWORK_ENV,
           },
-          { status: 500 }
+          { status: 402 }
         );
       }
     }
