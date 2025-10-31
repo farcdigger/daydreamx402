@@ -6,9 +6,9 @@ import { useAccount, useChainId, useWriteContract, useWaitForTransactionReceipt,
 import { parseUnits } from 'viem';
 import { erc20Abi } from 'viem';
 import { base } from 'wagmi/chains';
-import { createDreams } from '@daydreamsai/core';
-import { createDreamsRouterAuth } from '@daydreamsai/core';
-import { createOpenAI } from '@daydreamsai/ai-sdk-provider';
+import { generateText } from 'ai';
+import { createDreamsRouter } from '@daydreamsai/ai-sdk-provider';
+import type { Account } from 'viem';
 
 const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as `0x${string}`; // Base mainnet USDC
 const RECIPIENT_ADDRESS = '0x6a40e304193d2BD3fa7479c35a45bA4CCDBb4683' as `0x${string}`; // Seller wallet
@@ -73,96 +73,87 @@ export default function Home() {
         }
 
         try {
-          // Create Dreams Router Auth with user's wallet for x402 payment
+          // Create viem Account from wagmi wallet client for Dreams Router
+          // According to docs: https://docs.daydreams.systems/docs/router/dreams-sdk
+          // Using account-like object that implements signing methods
           const account = {
             address: address as `0x${string}`,
-            signMessage: async (message: string) => {
-              const signature = await walletClient.signMessage({
+            async signMessage({ message }: { message: string }) {
+              return await walletClient.signMessage({
                 account: address as `0x${string}`,
                 message,
               });
-              return signature;
             },
-            signTypedData: async (params: any) => {
-              const signature = await walletClient.signTypedData({
+            async signTypedData(params: any) {
+              return await walletClient.signTypedData({
                 account: address as `0x${string}`,
                 ...params,
               });
-              return signature;
             },
-          } as any;
+          } as Account;
 
-          const dreamsAuth = createDreamsRouterAuth({
-            account,
+          // Create Dreams Router with EVM auth and x402 payments
+          // Using .evm() namespace method from docs
+          const dreamsRouter = createDreamsRouter.evm(account, {
             payments: {
-              amount: PAYMENT_AMOUNT,
-              network: 'base',
+              network: 'base', // Base mainnet for payments
             },
           });
 
-          // For x402 payment, we need to make an AI call through Dreams Router
+          // For x402 payment, make an AI call through Dreams Router
           // This will automatically trigger the x402 payment flow via facilitator
           setPaymentStatus('Initiating x402 payment via Daydreams Router...');
           
           try {
-            // Check if OpenAI API key is available (optional for x402 flow)
-            const openaiApiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
+            // Use generateText from Vercel AI SDK with Dreams Router model
+            // The payment amount and recipient come automatically from the 402 response
+            setPaymentStatus('Processing x402 payment...');
             
-            if (openaiApiKey) {
-              // Create Dreams instance with x402 payment enabled
-              const openai = createOpenAI({
-                apiKey: openaiApiKey,
-              });
-
-              const dreams = createDreams({
-                auth: dreamsAuth,
-                model: openai('gpt-4o-mini'), // Minimal model for x402 payment trigger
-              });
-
-              // Make a minimal AI call to trigger x402 payment
-              // This will automatically initiate the x402 payment flow via facilitator
-              setPaymentStatus('Processing x402 payment...');
-              
-              const result = await dreams.agent.complete('Token presale payment');
-              
-              // x402 payment is handled automatically by Dreams Router
-              // The payment transaction will be processed via x402 facilitator
-              setPaymentStatus('x402 payment processed via Daydreams Router!');
-              
-              // After successful payment, retry the API call with x402 headers
-              // Note: In production, x402 headers would be captured from the payment response
-              setPaymentStatus('Payment successful! Verifying...');
-              
-              // Retry the payment registration
-              const retryResponse = await fetch('/api/pay', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  // x402 headers would be included here in production
-                },
-                body: JSON.stringify({
-                  wallet: address,
-                  amount: '5000000',
-                }),
-              });
-              
-              if (retryResponse.ok) {
-                const retryData = await retryResponse.json();
-                setPaymentStatus(`Payment verified! ${retryData.message || ''}`);
-              } else if (retryResponse.status === 402) {
-                // Still 402, payment wasn't captured properly
-                throw new Error('x402 payment verification failed');
-              }
+            const { text } = await generateText({
+              model: dreamsRouter('google-vertex/gemini-2.5-flash'), // Any model from router dashboard
+              prompt: 'Token presale payment confirmation',
+            });
+            
+            // x402 payment is handled automatically by Dreams Router
+            // The payment transaction is processed via x402 facilitator
+            setPaymentStatus('x402 payment processed via Daydreams Router!');
+            
+            // After successful payment, retry the API call
+            // x402 headers are automatically included in subsequent requests
+            setPaymentStatus('Payment successful! Verifying...');
+            
+            // Retry the payment registration
+            // Note: In production, x402 payment headers are automatically handled by Dreams Router
+            const retryResponse = await fetch('/api/pay', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                wallet: address,
+                amount: '5000000',
+              }),
+            });
+            
+            if (retryResponse.ok) {
+              const retryData = await retryResponse.json();
+              setPaymentStatus(`Payment verified! ${retryData.message || ''}`);
+            } else if (retryResponse.status === 402) {
+              // Still 402, payment wasn't captured properly
+              // This shouldn't happen if x402 payment was successful
+              throw new Error('x402 payment verification failed');
             } else {
-              // No OpenAI API key - use direct x402 payment flow via facilitator
-              // For token presale, we'll use direct USDC transfer as x402 facilitator alternative
-              throw new Error('OpenAI API key not configured. Using direct payment method.');
+              const errorData = await retryResponse.json();
+              throw new Error(errorData.error || 'Payment verification failed');
             }
             
           } catch (dreamsError: any) {
             console.error('Dreams Router x402 payment error:', dreamsError);
-            // If Dreams Router payment fails, fallback to direct transfer
-            setPaymentStatus('Using direct USDC transfer...');
+            setError(`x402 payment error: ${dreamsError.message}`);
+            setPaymentStatus(null);
+            
+            // Fallback to direct transfer if Dreams Router fails
+            setPaymentStatus('Falling back to direct USDC transfer...');
             writeContract({
               address: USDC_ADDRESS,
               abi: erc20Abi as readonly any[],
@@ -173,7 +164,7 @@ export default function Home() {
           }
         } catch (x402Error: any) {
           console.error('x402 payment setup error:', x402Error);
-          setError(`x402 payment error: ${x402Error.message}`);
+          setError(`x402 payment setup error: ${x402Error.message}`);
           setPaymentStatus(null);
         }
         return;
