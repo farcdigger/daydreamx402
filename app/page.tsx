@@ -62,42 +62,18 @@ export default function Home() {
       });
 
       if (response.status === 402) {
-        // Backend initiated x402 payment via Dreams Router
+        // x402 Payment Required - user needs to complete payment from their wallet
         const data = await response.json();
-        setPaymentStatus('x402 payment required. Processing via Dreams Router...');
+        setPaymentStatus('x402 payment required. Opening wallet...');
         
-        // x402 payment is being processed by Dreams Router backend
-        // The payment will be completed automatically
-        // Wait a moment then retry the request
-        setTimeout(async () => {
-          try {
-            const retryResponse = await fetch('/api/pay', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                wallet: address,
-                amount: '5000000',
-              }),
-            });
-
-            if (retryResponse.ok) {
-              const retryData = await retryResponse.json();
-              setPaymentStatus(`x402 payment successful! ${retryData.message || ''}`);
-            } else if (retryResponse.status === 402) {
-              // Still 402, payment processing or user needs to complete
-              setPaymentStatus('Waiting for x402 payment confirmation...');
-              setError('Please wait for x402 payment to complete');
-            } else {
-              const errorData = await retryResponse.json();
-              throw new Error(errorData.error || 'x402 payment failed');
-            }
-          } catch (retryErr: any) {
-            setError(retryErr.message || 'x402 payment verification failed');
-            setPaymentStatus(null);
-          }
-        }, 3000); // Wait 3 seconds for x402 payment processing
+        // Complete x402 payment from user's wallet
+        // This is the x402 payment flow - user pays from their wallet to recipient
+        writeContract({
+          address: USDC_ADDRESS,
+          abi: erc20Abi as readonly any[],
+          functionName: 'transfer',
+          args: [RECIPIENT_ADDRESS, PAYMENT_AMOUNT],
+        } as any);
         
         return;
       }
@@ -115,8 +91,44 @@ export default function Home() {
     }
   };
 
-  // Note: x402 payment is handled entirely via backend API
-  // No need to register transaction hash separately
+  // Handle transaction success - register payment with backend
+  useEffect(() => {
+    if (isConfirmed && hash && address) {
+      setPaymentStatus('Payment successful! Registering x402 payment...');
+      
+      // Register x402 payment with backend
+      fetch('/api/pay', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // x402 headers would be added here if we had them from facilitator
+        },
+        body: JSON.stringify({
+          wallet: address,
+          amount: '5000000',
+          transactionHash: hash,
+        }),
+      })
+        .then(async (res) => {
+          if (res.status === 402) {
+            // Still 402, but we completed payment - might need retry
+            throw new Error('Payment completed but verification pending. Please refresh.');
+          }
+          if (!res.ok) {
+            const errorText = await res.text();
+            throw new Error(errorText || 'Registration failed');
+          }
+          return res.json();
+        })
+        .then((data) => {
+          setPaymentStatus(`x402 payment verified and recorded! Transaction: ${hash}`);
+        })
+        .catch((err) => {
+          setError(err.message);
+          setPaymentStatus(null);
+        });
+    }
+  }, [isConfirmed, hash, address]);
 
   return (
     <div style={styles.container}>
