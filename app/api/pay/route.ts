@@ -7,7 +7,11 @@ const NETWORK_ENV = process.env.NETWORK || "base";
 const PAYMENT_AMOUNT = process.env.PAYMENT_AMOUNT || "5000000"; // $5 USDC (6 decimals)
 const SELLER_PRIVATE_KEY = process.env.SELLER_PRIVATE_KEY as `0x${string}`;
 const DREAMSROUTER_API_KEY = process.env.DREAMSROUTER_API_KEY;
-const ROUTER_API_URL = 'https://router.daydreams.systems/v1/chat/completions';
+// Router API URL - check Quickstart docs for correct endpoint
+// Quickstart shows: https://router.daydreams.systems/v1/chat/completions
+// But models endpoint uses: https://api-beta.daydreams.systems/v1/models
+// Try router.daydreams.systems first, fallback to api-beta if needed
+const ROUTER_API_URL = process.env.ROUTER_API_URL || 'https://router.daydreams.systems/v1/chat/completions';
 
 // Generate x402 payment header per Quickstart guide
 // https://docs.daydreams.systems/docs/router/quickstart
@@ -50,7 +54,8 @@ export async function POST(req: NextRequest) {
       
       // Make request to Router API with client's payment header
       try {
-        const routerResponse = await fetch(ROUTER_API_URL, {
+        // Try router.daydreams.systems first
+        let routerResponse = await fetch(ROUTER_API_URL, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -62,6 +67,24 @@ export async function POST(req: NextRequest) {
             stream: false,
           }),
         });
+
+        // If 404, try api-beta endpoint
+        if (routerResponse.status === 404 && ROUTER_API_URL.includes('router.daydreams.systems')) {
+          console.log('404 on router.daydreams.systems, trying api-beta.daydreams.systems');
+          const betaUrl = ROUTER_API_URL.replace('router.daydreams.systems', 'api-beta.daydreams.systems');
+          routerResponse = await fetch(betaUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Payment': clientPaymentHeader,
+            },
+            body: JSON.stringify({
+              model: 'google-vertex/gemini-2.5-flash',
+              messages: [{ role: 'user', content: 'Token presale payment confirmation' }],
+              stream: false,
+            }),
+          });
+        }
 
         if (routerResponse.ok) {
           const data = await routerResponse.json();
@@ -109,7 +132,8 @@ export async function POST(req: NextRequest) {
       console.log('Using API key auth');
       
       try {
-        const routerResponse = await fetch(ROUTER_API_URL, {
+        // Try router.daydreams.systems first
+        let routerResponse = await fetch(ROUTER_API_URL, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -121,6 +145,24 @@ export async function POST(req: NextRequest) {
             stream: false,
           }),
         });
+
+        // If 404, try api-beta endpoint
+        if (routerResponse.status === 404 && ROUTER_API_URL.includes('router.daydreams.systems')) {
+          console.log('404 on router.daydreams.systems, trying api-beta.daydreams.systems');
+          const betaUrl = ROUTER_API_URL.replace('router.daydreams.systems', 'api-beta.daydreams.systems');
+          routerResponse = await fetch(betaUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${DREAMSROUTER_API_KEY}`,
+            },
+            body: JSON.stringify({
+              model: 'google-vertex/gemini-2.5-flash',
+              messages: [{ role: 'user', content: 'Token presale payment confirmation' }],
+              stream: false,
+            }),
+          });
+        }
 
         if (routerResponse.ok) {
           const data = await routerResponse.json();
@@ -189,7 +231,8 @@ export async function POST(req: NextRequest) {
     
     // Make request with X-Payment header per Quickstart
     try {
-      const routerResponse = await fetch(ROUTER_API_URL, {
+      // Try router.daydreams.systems first
+      let routerResponse = await fetch(ROUTER_API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -201,6 +244,24 @@ export async function POST(req: NextRequest) {
           stream: false,
         }),
       });
+
+      // If 404, try api-beta endpoint
+      if (routerResponse.status === 404 && ROUTER_API_URL.includes('router.daydreams.systems')) {
+        console.log('404 on router.daydreams.systems, trying api-beta.daydreams.systems');
+        const betaUrl = ROUTER_API_URL.replace('router.daydreams.systems', 'api-beta.daydreams.systems');
+        routerResponse = await fetch(betaUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Payment': paymentHeader,
+          },
+          body: JSON.stringify({
+            model: 'google-vertex/gemini-2.5-flash',
+            messages: [{ role: 'user', content: 'Token presale payment confirmation' }],
+            stream: false,
+          }),
+        });
+      }
 
       if (routerResponse.ok) {
         const data = await routerResponse.json();
