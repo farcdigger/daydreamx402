@@ -36,20 +36,17 @@ export default function Home() {
     setError(null);
     setPaymentStatus('Preparing transaction...');
 
-    writeContract(
-      {
+    try {
+      writeContract({
         address: USDC_ADDRESS,
-        abi: erc20Abi,
+        abi: erc20Abi as any,
         functionName: 'transfer',
         args: [RECIPIENT_ADDRESS, PAYMENT_AMOUNT],
-      },
-      {
-        onError: (err: any) => {
-          setError(err.message || 'Transaction failed');
-          setPaymentStatus(null);
-        },
-      }
-    );
+      });
+    } catch (err: any) {
+      setError(err.message || 'Transaction failed');
+      setPaymentStatus(null);
+    }
   };
 
   // Handle transaction success
