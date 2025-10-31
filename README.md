@@ -35,6 +35,10 @@ SELLER_PRIVATE_KEY=0x... # Private key of seller wallet for x402 payments
 SELLER_WALLET=0x6a40e304193d2BD3fa7479c35a45bA4CCDBb4683
 PAYMENT_AMOUNT=5000000 # $5 USDC (6 decimals)
 NETWORK=base # Base network for payments
+
+# OpenAI API Key (optional, for x402 payment via Daydreams Router)
+# If not provided, system will use direct USDC transfer as fallback
+NEXT_PUBLIC_OPENAI_API_KEY=sk-... # Optional: For x402 payment flow via Dreams Router
 ```
 
 ### 3. Get WalletConnect Project ID
@@ -62,6 +66,7 @@ Visit http://localhost:3000
    - `SELLER_WALLET` (optional, defaults to provided address)
    - `PAYMENT_AMOUNT` (optional, defaults to 5000000)
    - `NETWORK` (optional, defaults to "base")
+   - `NEXT_PUBLIC_OPENAI_API_KEY` (optional, for x402 payment via Daydreams Router)
 3. Deploy automatically
 
 ## How It Works (x402 Payment Flow)
@@ -69,10 +74,15 @@ Visit http://localhost:3000
 1. **User visits site** → RainbowKit wallet selector appears
 2. **User connects wallet** → MetaMask, WalletConnect, Coinbase Wallet, etc.
 3. **User clicks "Pay $5 USDC"** → Frontend sends request to backend
-4. **Backend checks x402 payment** → Returns 402 Payment Required if no payment
-5. **User completes payment** → Payment via x402 protocol (currently direct transfer as fallback)
+4. **Backend checks x402 payment** → Returns 402 Payment Required if no payment headers
+5. **Client-side x402 payment** → Daydreams Router with user's wallet creates x402 payment:
+   - Creates `createDreamsRouterAuth` with user's wallet account
+   - Makes AI call via `createDreams` to trigger x402 payment flow
+   - x402 facilitator processes payment automatically
 6. **Backend verifies payment** → x402 headers verified, payment recorded
 7. **Success** → Payment confirmed and registered
+
+**Note:** If `NEXT_PUBLIC_OPENAI_API_KEY` is not set, the system falls back to direct USDC transfer.
 
 ## Tech Stack
 
@@ -81,6 +91,9 @@ Visit http://localhost:3000
 - **Wagmi**: React Hooks for Ethereum
 - **Viem**: TypeScript Ethereum library
 - **Base Network**: Layer 2 for payments
+- **Daydreams Router**: x402 payment protocol integration
+  - `@daydreamsai/core`: Core Dreams Router SDK
+  - `@daydreamsai/ai-sdk-provider`: AI SDK provider for x402 payments
 
 ## Payment Details
 
