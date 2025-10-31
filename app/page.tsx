@@ -1,10 +1,11 @@
 'use client';
 
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { parseUnits, formatUnits } from 'viem';
+import { useAccount, useChainId, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { parseUnits } from 'viem';
 import { useState, useEffect } from 'react';
 import { erc20Abi } from 'viem';
+import { base } from 'wagmi/chains';
 
 const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as `0x${string}`; // Base mainnet USDC
 const RECIPIENT_ADDRESS = '0x6a40e304193d2BD3fa7479c35a45bA4CCDBb4683' as `0x${string}`; // Seller wallet
@@ -12,6 +13,7 @@ const PAYMENT_AMOUNT = parseUnits('5', 6); // $5 USDC (6 decimals)
 
 export default function Home() {
   const { address, isConnected } = useAccount();
+  const chainId = useChainId();
   const [paymentStatus, setPaymentStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   
@@ -36,17 +38,18 @@ export default function Home() {
     setError(null);
     setPaymentStatus('Preparing transaction...');
 
-    try {
-      writeContract({
-        address: USDC_ADDRESS,
-        abi: erc20Abi,
-        functionName: 'transfer',
-        args: [RECIPIENT_ADDRESS, PAYMENT_AMOUNT] as const,
-      });
-    } catch (err: any) {
-      setError(err.message || 'Transaction failed');
+    if (chainId !== base.id) {
+      setError('Please switch to Base network');
       setPaymentStatus(null);
+      return;
     }
+
+    writeContract({
+      address: USDC_ADDRESS,
+      abi: erc20Abi,
+      functionName: 'transfer',
+      args: [RECIPIENT_ADDRESS, PAYMENT_AMOUNT],
+    });
   };
 
   // Handle transaction success
