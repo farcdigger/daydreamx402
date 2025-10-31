@@ -1,102 +1,170 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateText } from 'ai';
-import { createDreamsRouter, createEVMAuthFromPrivateKey } from '@daydreamsai/ai-sdk-provider';
+import { generateX402Payment } from '@daydreamsai/ai-sdk-provider';
+import { privateKeyToAccount } from 'viem/accounts';
 
-// Payment config as per Dreams Router documentation
-// Amounts and pay-to addresses come from the router's 402 response automatically
+// Payment config per Quickstart: https://docs.daydreams.systems/docs/router/quickstart
 const NETWORK_ENV = process.env.NETWORK || "base";
+const PAYMENT_AMOUNT = process.env.PAYMENT_AMOUNT || "5000000"; // $5 USDC (6 decimals)
 const SELLER_PRIVATE_KEY = process.env.SELLER_PRIVATE_KEY as `0x${string}`;
 const DREAMSROUTER_API_KEY = process.env.DREAMSROUTER_API_KEY;
+const ROUTER_API_URL = 'https://router.daydreams.systems/v1/chat/completions';
 
-// Cache Dreams Router instance
-let cachedDreamsRouter: ReturnType<typeof createDreamsRouter> | Awaited<ReturnType<typeof createEVMAuthFromPrivateKey>>['dreamsRouter'] | null = null;
-
-// Initialize Dreams Router with x402 payments
-// As per docs: https://docs.daydreams.systems/docs/router/dreams-sdk
-async function getDreamsRouter() {
-  // Return cached instance if available
-  if (cachedDreamsRouter) {
-    return cachedDreamsRouter;
+// Generate x402 payment header per Quickstart guide
+// https://docs.daydreams.systems/docs/router/quickstart
+async function generatePaymentHeader() {
+  if (!SELLER_PRIVATE_KEY) {
+    console.error('SELLER_PRIVATE_KEY is required for x402 payments');
+    return null;
   }
-  
+
   try {
-    // Try API key auth first (if available)
-    // Note: API key payments config may need to be set in dashboard
-    if (DREAMSROUTER_API_KEY) {
-      console.log('Creating Dreams Router with API key auth');
-      const dreamsRouter = createDreamsRouter({
-        apiKey: DREAMSROUTER_API_KEY,
-      });
-      cachedDreamsRouter = dreamsRouter;
-      console.log('Dreams Router created with API key');
-      return dreamsRouter;
-    }
+    const account = privateKeyToAccount(SELLER_PRIVATE_KEY);
     
-    // Fallback to EVM private key auth with payment config
-    if (!SELLER_PRIVATE_KEY) {
-      console.error('Neither DREAMSROUTER_API_KEY nor SELLER_PRIVATE_KEY is set');
-      return null;
-    }
-    
-    console.log('Creating Dreams Router with EVM private key, network:', NETWORK_ENV);
-    // Use createEVMAuthFromPrivateKey helper as per documentation
-    // Payment config: amounts and recipients come from router's 402 response automatically
-    const { dreamsRouter } = await createEVMAuthFromPrivateKey(
-      SELLER_PRIVATE_KEY,
-      {
-        payments: { 
-          network: NETWORK_ENV as 'base' | 'base-sepolia',
-          // validityDuration: 600, // default 600s (10 minutes)
-          // mode: 'lazy', // default 'lazy' (pay on first request) vs 'eager' (pre-auth)
-        },
-      }
-    );
-    cachedDreamsRouter = dreamsRouter;
-    console.log('Dreams Router created with EVM auth and x402 payments');
-    return dreamsRouter;
+    // Generate x402-compliant payment header
+    const paymentHeader = await generateX402Payment(account, {
+      amount: PAYMENT_AMOUNT, // $5 USDC (6 decimals)
+      network: NETWORK_ENV as 'base' | 'base-sepolia',
+    });
+
+    console.log('Generated x402 payment header');
+    return paymentHeader;
   } catch (error: any) {
-    console.error('Failed to create Dreams Router:', error);
+    console.error('Failed to generate payment header:', error);
     console.error('Error details:', error?.message, error?.stack);
     return null;
   }
 }
 
-// x402 Payment Flow (per Dreams Router documentation):
-// 1. Client requests without x-402-payment headers
-// 2. Server calls generateText → Dreams Router returns 402 with payment headers
-// 3. Client receives 402, extracts x-402-payment header, completes payment
-// 4. Client retries request WITH x-402-payment and x-402-signature headers
-// 5. Server verifies headers and processes payment
+// x402 Payment Flow per Quickstart: https://docs.daydreams.systems/docs/router/quickstart
+// 1. Generate X-Payment header using generateX402Payment
+// 2. Make request to REST API with X-Payment header
+// 3. If 402 returned, payment required - client completes payment and retries
 
 export async function POST(req: NextRequest) {
   try {
-    // Check x402 payment headers
-    // If headers are present, payment was completed by client
-    const x402Payment = req.headers.get('x-402-payment');
-    const x402Signature = req.headers.get('x-402-signature');
+    // Check if client sent X-Payment header (payment already completed)
+    const clientPaymentHeader = req.headers.get('X-Payment') || req.headers.get('x-payment');
     
-    // If x402 headers are present, payment was successful
-    if (x402Payment && x402Signature) {
-      console.log('x402 payment headers received - payment verified');
-      console.log('x-402-payment:', x402Payment.substring(0, 50) + '...');
+    if (clientPaymentHeader) {
+      console.log('Client provided X-Payment header - verifying payment with Router');
       
-      // Parse payment info from headers if needed (router handles verification)
-      // Amounts and recipients come from router's 402 response - already signed
-      
-      return NextResponse.json({
-        status: "success",
-        message: "x402 payment verified and recorded successfully",
-        x402Payment: true,
-        network: NETWORK_ENV,
-        timestamp: new Date().toISOString(),
-      });
+      // Make request to Router API with client's payment header
+      try {
+        const routerResponse = await fetch(ROUTER_API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Payment': clientPaymentHeader,
+          },
+          body: JSON.stringify({
+            model: 'google-vertex/gemini-2.5-flash',
+            messages: [{ role: 'user', content: 'Token presale payment confirmation' }],
+            stream: false,
+          }),
+        });
+
+        if (routerResponse.ok) {
+          const data = await routerResponse.json();
+          console.log('Payment verified successfully with Router');
+          
+          return NextResponse.json({
+            status: "success",
+            message: "x402 payment verified and recorded successfully",
+            x402Payment: true,
+            network: NETWORK_ENV,
+            amount: PAYMENT_AMOUNT,
+            timestamp: new Date().toISOString(),
+          });
+        } else if (routerResponse.status === 402) {
+          // Still 402 - payment not completed yet
+          return NextResponse.json(
+            {
+              error: "Payment required",
+              message: "Payment not yet completed. Please complete payment and retry.",
+              x402Payment: true,
+            },
+            { status: 402 }
+          );
+        } else {
+          const errorText = await routerResponse.text();
+          throw new Error(`Router API error: ${routerResponse.status} - ${errorText}`);
+        }
+      } catch (routerError: any) {
+        console.error('Router API verification error:', routerError);
+        return NextResponse.json(
+          {
+            error: "Payment verification failed",
+            message: routerError?.message || "Failed to verify payment with Router",
+          },
+          { status: 500 }
+        );
+      }
     }
     
-    // No x402 headers - initiate x402 payment via Dreams Router
-    console.log('No x402 headers - initiating payment via Dreams Router');
+    // No payment header - generate one and make initial request
+    console.log('No X-Payment header - generating payment header and initiating payment');
     
-    const dreamsRouter = await getDreamsRouter();
-    if (!dreamsRouter) {
+    // Option 1: Use API key if available
+    if (DREAMSROUTER_API_KEY) {
+      console.log('Using API key auth');
+      
+      try {
+        const routerResponse = await fetch(ROUTER_API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${DREAMSROUTER_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: 'google-vertex/gemini-2.5-flash',
+            messages: [{ role: 'user', content: 'Token presale payment confirmation' }],
+            stream: false,
+          }),
+        });
+
+        if (routerResponse.ok) {
+          const data = await routerResponse.json();
+          return NextResponse.json({
+            status: "success",
+            message: "Payment processed successfully (API key auth)",
+            x402Payment: false,
+            timestamp: new Date().toISOString(),
+          });
+        } else if (routerResponse.status === 402) {
+          // 402 Payment Required - need x402 payment
+          const x402Header = routerResponse.headers.get('x-402-payment');
+          
+          return NextResponse.json(
+            {
+              error: "Payment required",
+              message: "x402 payment required. Use generateX402PaymentBrowser in client.",
+              x402Payment: true,
+              network: NETWORK_ENV,
+              amount: PAYMENT_AMOUNT,
+            },
+            { 
+              status: 402,
+              headers: x402Header ? { 'x-402-payment': x402Header } : {},
+            }
+          );
+        } else {
+          const errorText = await routerResponse.text();
+          throw new Error(`Router API error: ${routerResponse.status} - ${errorText}`);
+        }
+      } catch (routerError: any) {
+        console.error('Router API error:', routerError);
+        return NextResponse.json(
+          {
+            error: "Router API error",
+            message: routerError?.message || "Failed to communicate with Router",
+          },
+          { status: 500 }
+        );
+      }
+    }
+    
+    // Option 2: Generate x402 payment header and make request
+    if (!SELLER_PRIVATE_KEY) {
       return NextResponse.json(
         { 
           error: "Payment gateway not configured.",
@@ -106,75 +174,74 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Make AI call via Dreams Router - this automatically triggers x402 payment
-    // Per docs: "Amounts and pay-to addresses come from the router's 402 response
-    // and are signed automatically; you do not set them manually."
+    const paymentHeader = await generatePaymentHeader();
+    if (!paymentHeader) {
+      return NextResponse.json(
+        {
+          error: "Failed to generate payment header",
+          message: "Could not generate x402 payment header",
+        },
+        { status: 500 }
+      );
+    }
+
+    console.log('Making request to Router API with X-Payment header');
+    
+    // Make request with X-Payment header per Quickstart
     try {
-      console.log('Calling generateText with Dreams Router...');
-      console.log('Model: google-vertex/gemini-2.5-flash');
-      console.log('Network:', NETWORK_ENV);
-      
-      const { text } = await generateText({
-        model: dreamsRouter('google-vertex/gemini-2.5-flash'),
-        prompt: 'Token presale payment confirmation',
+      const routerResponse = await fetch(ROUTER_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Payment': paymentHeader, // x402-compliant payment
+        },
+        body: JSON.stringify({
+          model: 'google-vertex/gemini-2.5-flash',
+          messages: [{ role: 'user', content: 'Token presale payment confirmation' }],
+          stream: false,
+        }),
       });
 
-      // If we get here, payment was successful (shouldn't happen on first call without headers)
-      console.log('generateText completed - payment may have been auto-processed');
-      console.log('Response text:', text);
-
-      return NextResponse.json({
-        status: "success",
-        message: "Payment processed successfully",
-        text,
-        x402Payment: true,
-        timestamp: new Date().toISOString(),
-      });
-    } catch (dreamsError: any) {
-      // Dreams Router throws 402 error when payment is required
-      // This is expected behavior - client should extract x-402-payment header from error
-      if (dreamsError?.status === 402 || dreamsError?.statusCode === 402) {
-        console.log('Received 402 from Dreams Router (expected x402 behavior)');
+      if (routerResponse.ok) {
+        const data = await routerResponse.json();
+        console.log('Payment successful via Router API');
         
-        // Extract x402 headers from error if available
-        // Client needs to complete payment and retry with headers
-        const responseHeaders: Record<string, string> = {};
-        if (dreamsError?.headers) {
-          const x402PaymentHeader = dreamsError.headers.get?.('x-402-payment') || 
-                                    dreamsError.headers['x-402-payment'];
-          if (x402PaymentHeader) {
-            responseHeaders['x-402-payment'] = x402PaymentHeader;
-          }
-        }
+        return NextResponse.json({
+          status: "success",
+          message: "x402 payment processed successfully",
+          x402Payment: true,
+          network: NETWORK_ENV,
+          amount: PAYMENT_AMOUNT,
+          timestamp: new Date().toISOString(),
+        });
+      } else if (routerResponse.status === 402) {
+        // Still 402 - payment needs to be completed
+        const x402Header = routerResponse.headers.get('x-402-payment');
         
         return NextResponse.json(
           {
             error: "Payment required",
-            message: "x402 payment required. Complete payment and retry with x-402-payment header.",
-            // Amount and recipient come from router's 402 response (in x-402-payment header)
-            network: NETWORK_ENV,
+            message: "x402 payment required. Complete payment and retry with X-Payment header.",
             x402Payment: true,
+            network: NETWORK_ENV,
+            amount: PAYMENT_AMOUNT,
           },
           { 
             status: 402,
-            headers: responseHeaders,
+            headers: x402Header ? { 'x-402-payment': x402Header } : {},
           }
         );
+      } else {
+        const errorText = await routerResponse.text();
+        throw new Error(`Router API error: ${routerResponse.status} - ${errorText}`);
       }
-      
-      // Other errors
-      console.error('Dreams Router error:', dreamsError);
-      console.error('Error name:', dreamsError?.name);
-      console.error('Error message:', dreamsError?.message);
-      console.error('Error status:', dreamsError?.status);
-      console.error('Error statusCode:', dreamsError?.statusCode);
-      console.error('Error code:', dreamsError?.code);
-      
+    } catch (routerError: any) {
+      console.error('Router API error:', routerError);
       return NextResponse.json(
         {
           error: "Payment gateway error",
-          message: dreamsError?.message || dreamsError?.toString() || "Failed to initiate x402 payment",
-          details: dreamsError?.stack?.substring(0, 300) || "Unknown error",
+          message: routerError?.message || "Failed to process payment via Router API",
+          details: routerError?.stack?.substring(0, 300) || "Unknown error",
         },
         { status: 500 }
       );
@@ -197,7 +264,7 @@ export async function OPTIONS() {
     headers: {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, x-402-payment, x-402-signature',
+      'Access-Control-Allow-Headers': 'Content-Type, X-Payment, x-payment, Authorization',
     },
   });
 }
