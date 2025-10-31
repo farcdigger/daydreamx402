@@ -1,8 +1,11 @@
 {
-  "buildCommand": "echo 'No build needed'",
-  "devCommand": "bun run src/index.ts",
-  "installCommand": "bun install",
+  "buildCommand": "echo 'No build needed for serverless functions'",
   "framework": null,
+  "functions": {
+    "api/index.ts": {
+      "runtime": "nodejs20.x"
+    }
+  },
   "rewrites": [
     {
       "source": "/(.*)",
