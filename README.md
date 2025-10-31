@@ -72,15 +72,16 @@ Visit http://localhost:3000
 2. **User connects wallet** → MetaMask, WalletConnect, Coinbase Wallet, etc.
 3. **User clicks "Pay $5 USDC"** → Frontend sends request to backend
 4. **Backend checks x402 payment** → Returns 402 Payment Required if no payment headers
-5. **Client-side x402 payment via Dreams Router** → Using [Daydreams SDK](https://docs.daydreams.systems/docs/router/dreams-sdk):
-   - Creates viem Account from user's wallet client
-   - Initializes `createDreamsRouter.evm()` with account and payment config
-   - Uses Vercel AI SDK `generateText()` with Dreams Router model
-   - x402 facilitator automatically processes payment (amount/recipient from 402 response)
-6. **Backend verifies payment** → x402 headers verified, payment recorded
-7. **Success** → Payment confirmed and registered
+5. **Backend initiates x402 payment via Dreams Router** → Server-side only:
+   - Backend uses `createDreamsRouter.evm()` with seller's private key
+   - Makes AI call via `generateText()` with Dreams Router model
+   - x402 facilitator automatically processes payment
+   - Client receives 402 response
+6. **Client completes payment** → Direct USDC transfer (x402 handled backend)
+7. **Backend verifies payment** → Payment recorded
+8. **Success** → Payment confirmed and registered
 
-**Note:** If Dreams Router payment fails, the system falls back to direct USDC transfer.
+**Note:** Dreams SDK runs only server-side (Node.js required). Client-side uses direct USDC transfer when 402 received.
 
 ## Tech Stack
 
@@ -89,7 +90,7 @@ Visit http://localhost:3000
 - **Wagmi**: React Hooks for Ethereum
 - **Viem**: TypeScript Ethereum library
 - **Base Network**: Layer 2 for payments
-- **Daydreams Router**: x402 payment protocol integration
+- **Daydreams Router**: x402 payment protocol integration (server-side only)
   - `@daydreamsai/ai-sdk-provider`: Dreams Router provider for Vercel AI SDK
   - `ai` (Vercel AI SDK): AI model calls with x402 payments
   - `x402`: x402 payment protocol
