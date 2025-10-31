@@ -347,10 +347,6 @@
 
         const data = await response.json();
 
-        if (!response.ok) {
-          throw new Error(data.error || 'Payment failed');
-        }
-
         // Show success
         loading.classList.remove('show');
         
