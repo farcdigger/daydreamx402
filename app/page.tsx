@@ -39,9 +39,9 @@ export default function Home() {
     try {
       writeContract({
         address: USDC_ADDRESS,
-        abi: erc20Abi as any,
+        abi: erc20Abi,
         functionName: 'transfer',
-        args: [RECIPIENT_ADDRESS, PAYMENT_AMOUNT],
+        args: [RECIPIENT_ADDRESS, PAYMENT_AMOUNT] as const,
       });
     } catch (err: any) {
       setError(err.message || 'Transaction failed');
