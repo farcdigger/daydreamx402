@@ -2,6 +2,9 @@
   "name": "daydreams-x402-router",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": ">=20.x"
+  },
   "scripts": {
     "dev": "bun run src/index.ts",
     "build": "echo 'No build needed'",
