@@ -2,13 +2,18 @@
 
 import React, { useState } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount, useChainId } from 'wagmi';
+import { useAccount, useChainId, useSignTypedData } from 'wagmi';
 import { base } from 'wagmi/chains';
-// x402 payment is handled entirely via backend Dreams Router - no direct wallet transfers
+import { generateX402PaymentBrowser } from '@daydreamsai/ai-sdk-provider';
+// x402 payment per Quickstart: https://docs.daydreams.systems/docs/router/quickstart
+
+const PAYMENT_AMOUNT = '5000000'; // $5 USDC (6 decimals)
+const NETWORK = 'base'; // Base network
 
 export default function Home() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
+  const { signTypedDataAsync } = useSignTypedData();
   const [paymentStatus, setPaymentStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -44,47 +49,66 @@ export default function Home() {
       });
 
       if (response.status === 402) {
-        // x402 Payment Required - Dreams Router initiated payment
-        // User's wallet should open automatically for x402 payment
+        // x402 Payment Required - generate payment header and retry
         const data = await response.json();
-        setPaymentStatus('x402 payment initiated. Please approve payment in your wallet...');
+        setPaymentStatus('x402 payment required. Generating payment header...');
         
-        // Wait a moment for x402 payment to process, then retry
-        setTimeout(async () => {
-          try {
-            setPaymentStatus('Verifying x402 payment...');
-            
-            const retryResponse = await fetch('/api/pay', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                wallet: address,
-                amount: '5000000',
-              }),
-            });
-
-            if (retryResponse.ok) {
-              const retryData = await retryResponse.json();
-              setPaymentStatus(`✅ Payment successful! ${retryData.message || ''}`);
-            } else if (retryResponse.status === 402) {
-              // Still processing, wait longer
-              setPaymentStatus('Waiting for x402 payment confirmation...');
-              setError('Payment is processing. Please wait...');
-            } else {
-              const errorData = await retryResponse.json();
-              const errorMsg = errorData.message || errorData.error || 'Payment verification failed';
-              const details = errorData.details ? ` Details: ${errorData.details}` : '';
-              throw new Error(`${errorMsg}${details}`);
-            }
-          } catch (retryErr: any) {
-            setError(retryErr.message || 'Payment verification failed');
-            setPaymentStatus(null);
-          } finally {
-            setIsProcessing(false);
+        try {
+          // Generate x402 payment header per Quickstart
+          // https://docs.daydreams.systems/docs/router/quickstart
+          if (!address || !signTypedDataAsync) {
+            throw new Error('Wallet not connected or signing not available');
           }
-        }, 5000); // Wait 5 seconds for x402 payment processing
+
+          setPaymentStatus('Signing payment request in wallet...');
+          
+          const paymentHeader = await generateX402PaymentBrowser(
+            address,
+            signTypedDataAsync,
+            { 
+              amount: PAYMENT_AMOUNT, 
+              network: NETWORK as 'base' | 'base-sepolia'
+            }
+          );
+
+          console.log('Generated x402 payment header, retrying with X-Payment header');
+          setPaymentStatus('Payment header generated. Completing payment...');
+
+          // Retry request with X-Payment header
+          const retryResponse = await fetch('/api/pay', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Payment': paymentHeader, // x402 payment header
+            },
+            body: JSON.stringify({
+              wallet: address,
+              amount: PAYMENT_AMOUNT,
+            }),
+          });
+
+          if (retryResponse.ok) {
+            const retryData = await retryResponse.json();
+            setPaymentStatus(`✅ Payment successful! ${retryData.message || ''}`);
+            setIsProcessing(false);
+          } else if (retryResponse.status === 402) {
+            // Still 402 - payment not completed
+            const errorData = await retryResponse.json();
+            setPaymentStatus('Payment not yet completed. Please try again.');
+            setError(errorData.message || 'Payment is still processing');
+            setIsProcessing(false);
+          } else {
+            const errorData = await retryResponse.json();
+            const errorMsg = errorData.message || errorData.error || 'Payment verification failed';
+            const details = errorData.details ? ` Details: ${errorData.details}` : '';
+            throw new Error(`${errorMsg}${details}`);
+          }
+        } catch (paymentErr: any) {
+          console.error('x402 payment generation error:', paymentErr);
+          setError(paymentErr.message || 'Failed to generate x402 payment. Please try again.');
+          setPaymentStatus(null);
+          setIsProcessing(false);
+        }
         
         return;
       }
