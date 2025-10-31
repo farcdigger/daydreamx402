@@ -294,23 +294,16 @@ app.post('/pay', async (c: Context) => {
   }
 });
 
-// Export for Vercel serverless
-export default app;
-
-// For local development
-if (typeof Bun !== 'undefined') {
-  // Bun runtime
+// For local development only (not in Vercel)
+if (typeof Bun !== 'undefined' && !process.env.VERCEL) {
+  // Bun runtime - local dev only
   const port = process.env.PORT || 3000;
   Bun.serve({
     port,
     fetch: app.fetch,
   });
   console.log(`Server running on http://localhost:${port}`);
-} else if (typeof process !== 'undefined') {
-  // Node.js runtime
-  const port = process.env.PORT || 3000;
-  // Node.js serverless (Vercel) - export default app is enough
-  if (!process.env.VERCEL) {
-    console.log(`For Node.js, use a compatible runtime or deploy to Vercel`);
-  }
 }
+
+// Export for Vercel serverless
+export default app;
