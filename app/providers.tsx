@@ -6,9 +6,15 @@ import { WagmiProvider } from 'wagmi';
 import { base } from 'wagmi/chains';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 
+const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '';
+
+if (!projectId) {
+  console.warn('Warning: NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is not set. Get one from https://cloud.walletconnect.com');
+}
+
 const config = getDefaultConfig({
   appName: 'Token Presale',
-  projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'your-project-id',
+  projectId: projectId || '00000000000000000000000000000000', // Temporary fallback
   chains: [base],
   ssr: true,
 });
