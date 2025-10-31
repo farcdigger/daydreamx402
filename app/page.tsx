@@ -46,45 +46,18 @@ export default function Home() {
       return;
     }
 
+    // Direct USDC transfer - wallet approval will open automatically
+    setPaymentStatus('Initiating payment...');
+    
     try {
-      // Step 1: Try to register payment (will get 402 if payment required)
-      const response = await fetch('/api/pay', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          wallet: address,
-          amount: '5000000',
-        }),
-      });
-
-      // If 402 Payment Required, complete payment via direct USDC transfer
-      // Note: Daydreams SDK requires Node.js and can't run in browser
-      // For production, x402 payment should be handled in backend API route
-      if (response.status === 402) {
-        setPaymentStatus('Payment required. Initiating direct USDC transfer...');
-        
-        // Use direct USDC transfer as x402 payment method
-        // In production, backend API can handle x402 payment server-side
-        writeContract({
-          address: USDC_ADDRESS,
-          abi: erc20Abi as readonly any[],
-          functionName: 'transfer',
-          args: [RECIPIENT_ADDRESS, PAYMENT_AMOUNT],
-        } as any);
-        return;
-      }
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Payment failed');
-      }
-
-      const data = await response.json();
-      setPaymentStatus(`Payment successful! ${data.message || ''}`);
+      writeContract({
+        address: USDC_ADDRESS,
+        abi: erc20Abi as readonly any[],
+        functionName: 'transfer',
+        args: [RECIPIENT_ADDRESS, PAYMENT_AMOUNT],
+      } as any);
     } catch (err: any) {
-      setError(err.message || 'Payment failed');
+      setError(err.message || 'Transaction failed');
       setPaymentStatus(null);
     }
   };
