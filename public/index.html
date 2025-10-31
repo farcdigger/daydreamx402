@@ -225,17 +225,6 @@
       </button>
     </div>
 
-    <!-- Prompt Section -->
-    <div class="prompt-section">
-      <label style="display: block; margin-bottom: 10px; font-weight: 600; color: #333;">
-        Your Question (Optional):
-      </label>
-      <textarea 
-        class="prompt-input" 
-        id="promptInput" 
-        placeholder="Ask anything... (e.g., What is the capital of France?)"
-      ></textarea>
-    </div>
 
     <!-- Loading -->
     <div class="loading" id="loading">
@@ -323,7 +312,6 @@
         return;
       }
 
-      const prompt = document.getElementById('promptInput').value.trim();
       const loading = document.getElementById('loading');
       const error = document.getElementById('error');
       const responseSection = document.getElementById('responseSection');
@@ -343,9 +331,19 @@
           body: JSON.stringify({
             wallet: connectedWallet,
             amount: '5000000', // $5 USDC (6 decimals)
-            prompt: prompt || 'Hello, how are you?',
           }),
         });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          let errorData;
+          try {
+            errorData = JSON.parse(errorText);
+          } catch {
+            throw new Error(errorText || `Server error: ${response.status}`);
+          }
+          throw new Error(errorData.error || errorData.details || 'Payment failed');
+        }
 
         const data = await response.json();
 

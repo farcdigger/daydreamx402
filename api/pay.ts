@@ -88,16 +88,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       model: dreamsRouter("google-vertex/gemini-2.5-flash"),
     });
 
-    // Execute AI request if prompt provided (triggers payment)
-    let aiResponse = null;
-    if (prompt && prompt.trim()) {
-      const response = await agent.complete(prompt);
-      aiResponse = {
-        text: response.outputText || "",
-        model: "google-vertex/gemini-2.5-flash",
-      };
-    }
-
+    // Execute AI request with default prompt (triggers x402 payment)
+    const defaultPrompt = "Hello! This is a test payment via x402.";
+    const response = await agent.complete(defaultPrompt);
+    
     return res.status(200).json({
       status: "success",
       message: "Payment processed successfully",
@@ -107,13 +101,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       paymentRecipient: sellerWalletAddress,
       network: NETWORK,
       userBalance: user.balance,
-      ...(aiResponse && { aiResponse }),
+      aiResponse: {
+        text: response.outputText || "",
+        model: "google-vertex/gemini-2.5-flash",
+      },
     });
   } catch (error: any) {
     console.error("Payment endpoint error:", error);
+    const errorMessage = error?.message || "Internal server error";
+    const errorDetails = error?.stack || error?.toString();
+    
+    // Ensure we always return valid JSON
     return res.status(500).json({
-      error: "Internal server error",
-      details: error.message,
+      error: errorMessage,
+      details: typeof errorDetails === 'string' ? errorDetails.substring(0, 200) : 'Unknown error',
     });
   }
 }
