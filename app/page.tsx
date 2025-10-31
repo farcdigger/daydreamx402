@@ -1,9 +1,9 @@
 'use client';
 
+import React, { useState, useEffect } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount, useChainId, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { parseUnits } from 'viem';
-import { useState, useEffect } from 'react';
 import { erc20Abi } from 'viem';
 import { base } from 'wagmi/chains';
 
@@ -44,12 +44,17 @@ export default function Home() {
       return;
     }
 
-    writeContract({
-      address: USDC_ADDRESS,
-      abi: erc20Abi,
-      functionName: 'transfer',
-      args: [RECIPIENT_ADDRESS, PAYMENT_AMOUNT],
-    });
+    try {
+      writeContract({
+        address: USDC_ADDRESS,
+        abi: erc20Abi as readonly any[],
+        functionName: 'transfer',
+        args: [RECIPIENT_ADDRESS, PAYMENT_AMOUNT],
+      } as any);
+    } catch (err: any) {
+      setError(err.message || 'Transaction failed');
+      setPaymentStatus(null);
+    }
   };
 
   // Handle transaction success
