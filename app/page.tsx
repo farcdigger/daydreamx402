@@ -1,35 +1,17 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount, useChainId, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { parseUnits } from 'viem';
-import { erc20Abi } from 'viem';
+import { useAccount, useChainId } from 'wagmi';
 import { base } from 'wagmi/chains';
-// Daydreams SDK removed from client-side - it requires Node.js modules (ws, events)
-// x402 payment will be handled via backend API or direct USDC transfer
-
-const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as `0x${string}`; // Base mainnet USDC
-const RECIPIENT_ADDRESS = '0x6a40e304193d2BD3fa7479c35a45bA4CCDBb4683' as `0x${string}`; // Seller wallet
-const PAYMENT_AMOUNT = parseUnits('5', 6); // $5 USDC (6 decimals)
+// x402 payment is handled entirely via backend Dreams Router - no direct wallet transfers
 
 export default function Home() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const [paymentStatus, setPaymentStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  
-  const { 
-    writeContract, 
-    data: hash, 
-    isPending, 
-    error: writeError 
-  } = useWriteContract();
-
-  const { isLoading: isConfirming, isSuccess: isConfirmed } = 
-    useWaitForTransactionReceipt({
-      hash,
-    });
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const handlePayment = async () => {
     if (!isConnected || !address) {
@@ -38,18 +20,18 @@ export default function Home() {
     }
 
     setError(null);
-    setPaymentStatus('Preparing payment...');
+    setPaymentStatus('Initiating x402 payment via Dreams Router...');
+    setIsProcessing(true);
 
     if (chainId !== base.id) {
       setError('Please switch to Base network');
       setPaymentStatus(null);
+      setIsProcessing(false);
       return;
     }
 
-    // Step 1: Request x402 payment from backend
-    setPaymentStatus('Initiating x402 payment...');
-    
     try {
+      // Request x402 payment from backend (Dreams Router handles payment)
       const response = await fetch('/api/pay', {
         method: 'POST',
         headers: {
@@ -62,18 +44,47 @@ export default function Home() {
       });
 
       if (response.status === 402) {
-        // x402 Payment Required - user needs to complete payment from their wallet
+        // x402 Payment Required - Dreams Router initiated payment
+        // User's wallet should open automatically for x402 payment
         const data = await response.json();
-        setPaymentStatus('x402 payment required. Opening wallet...');
+        setPaymentStatus('x402 payment initiated. Please approve payment in your wallet...');
         
-        // Complete x402 payment from user's wallet
-        // This is the x402 payment flow - user pays from their wallet to recipient
-        writeContract({
-          address: USDC_ADDRESS,
-          abi: erc20Abi as readonly any[],
-          functionName: 'transfer',
-          args: [RECIPIENT_ADDRESS, PAYMENT_AMOUNT],
-        } as any);
+        // Wait a moment for x402 payment to process, then retry
+        setTimeout(async () => {
+          try {
+            setPaymentStatus('Verifying x402 payment...');
+            
+            const retryResponse = await fetch('/api/pay', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                wallet: address,
+                amount: '5000000',
+              }),
+            });
+
+            if (retryResponse.ok) {
+              const retryData = await retryResponse.json();
+              setPaymentStatus(`✅ Payment successful! ${retryData.message || ''}`);
+            } else if (retryResponse.status === 402) {
+              // Still processing, wait longer
+              setPaymentStatus('Waiting for x402 payment confirmation...');
+              setError('Payment is processing. Please wait...');
+            } else {
+              const errorData = await retryResponse.json();
+              const errorMsg = errorData.message || errorData.error || 'Payment verification failed';
+              const details = errorData.details ? ` Details: ${errorData.details}` : '';
+              throw new Error(`${errorMsg}${details}`);
+            }
+          } catch (retryErr: any) {
+            setError(retryErr.message || 'Payment verification failed');
+            setPaymentStatus(null);
+          } finally {
+            setIsProcessing(false);
+          }
+        }, 5000); // Wait 5 seconds for x402 payment processing
         
         return;
       }
@@ -85,52 +96,16 @@ export default function Home() {
         throw new Error(`${errorMsg}${details}`);
       }
 
+      // Payment successful
       const data = await response.json();
-      setPaymentStatus(`Payment successful! ${data.message || ''}`);
+      setPaymentStatus(`✅ Payment successful! ${data.message || ''}`);
     } catch (err: any) {
       setError(err.message || 'Payment failed');
       setPaymentStatus(null);
+    } finally {
+      setIsProcessing(false);
     }
   };
-
-  // Handle transaction success - register payment with backend
-  useEffect(() => {
-    if (isConfirmed && hash && address) {
-      setPaymentStatus('Payment successful! Registering x402 payment...');
-      
-      // Register x402 payment with backend
-      fetch('/api/pay', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // x402 headers would be added here if we had them from facilitator
-        },
-        body: JSON.stringify({
-          wallet: address,
-          amount: '5000000',
-          transactionHash: hash,
-        }),
-      })
-        .then(async (res) => {
-          if (res.status === 402) {
-            // Still 402, but we completed payment - might need retry
-            throw new Error('Payment completed but verification pending. Please refresh.');
-          }
-          if (!res.ok) {
-            const errorText = await res.text();
-            throw new Error(errorText || 'Registration failed');
-          }
-          return res.json();
-        })
-        .then((data) => {
-          setPaymentStatus(`x402 payment verified and recorded! Transaction: ${hash}`);
-        })
-        .catch((err) => {
-          setError(err.message);
-          setPaymentStatus(null);
-        });
-    }
-  }, [isConfirmed, hash, address]);
 
   return (
     <div style={styles.container}>
@@ -151,41 +126,24 @@ export default function Home() {
               <button
                 style={{
                   ...styles.button,
-                  ...(isPending || isConfirming ? styles.buttonDisabled : {}),
+                  ...(isProcessing ? styles.buttonDisabled : {}),
                 }}
                 onClick={handlePayment}
-                disabled={isPending || isConfirming}
+                disabled={isProcessing}
               >
-                {isPending
-                  ? 'Confirm in wallet...'
-                  : isConfirming
-                  ? 'Processing...'
-                  : 'Pay $5 USDC'}
+                {isProcessing
+                  ? 'Processing x402 payment...'
+                  : 'Pay $5 USDC (x402)'}
               </button>
             </div>
 
             {paymentStatus && (
               <div style={styles.success}>
                 {paymentStatus}
-                {hash && (
-                  <a
-                    href={`https://basescan.org/tx/${hash}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={styles.link}
-                  >
-                    View on Basescan
-                  </a>
-                )}
               </div>
             )}
 
             {error && <div style={styles.error}>{error}</div>}
-            {writeError && (
-              <div style={styles.error}>
-                Transaction error: {writeError.message}
-              </div>
-            )}
           </>
         )}
       </div>
