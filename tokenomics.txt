@@ -1,0 +1,112 @@
+PAYX Token Economics
+=====================
+
+Token Name: PAYX
+Network: Base (Mainnet)
+Token Standard: ERC-20
+Decimals: 18
+
+Supply Model
+------------
+Total Supply: 1,000,000,000 PAYX (1 billion)
+Initial Distribution: Via token sale (x402 payment protocol)
+
+Token Sale Parameters
+---------------------
+Sale Rate: 20,000 PAYX per 1 USDC
+Minimum Purchase: 0.01 USDC (200 PAYX)
+Maximum Purchase: TBD (subject to KYC for large amounts)
+
+Payment Method: USDC (USD Coin)
+Payment Network: Base Mainnet
+Payment Protocol: x402 (micropayment protocol)
+
+Distribution Mechanism
+----------------------
+- Automatic distribution: No claim buttons required
+- Immediate transfer: Tokens sent within same transaction block
+- Gas paid by: Distributor wallet (not buyer)
+- Distribution contract: PAYX ERC-20 token contract
+
+Allocation Breakdown
+---------------------
+Total Supply: 1,000,000,000 PAYX (100%)
+
+1. Public Sale (via x402): 500,000,000 PAYX (50%)
+   - Current rate: 20,000 PAYX / USDC
+   - Duration: TBD
+   - Minimum raise: TBD USDC
+
+2. Liquidity Pool: 200,000,000 PAYX (20%)
+   - Initial liquidity provision
+   - DEX listing (Base-native DEX)
+
+3. Team & Advisors: 150,000,000 PAYX (15%)
+   - Vesting: 4 years linear vesting
+   - Lock: 6 months initial lock
+
+4. Ecosystem Development: 100,000,000 PAYX (10%)
+   - Partnerships
+   - Integrations
+   - Marketing
+
+5. Reserve: 50,000,000 PAYX (5%)
+   - Future development
+   - Emergency fund
+
+Liquidity Model
+---------------
+Initial Liquidity:
+- Pair: PAYX/USDC
+- Initial Price: 0.00005 USDC per PAYX (1 USDC = 20,000 PAYX)
+- Liquidity Provider: Project treasury
+- DEX: Base-native DEX (e.g., Uniswap V3 on Base)
+
+Liquidity Provisions:
+- 50% of sale proceeds allocated to liquidity
+- Locked liquidity: TBD duration
+- Automated market maker (AMM) model
+
+Price Discovery
+---------------
+- Initial price determined by sale rate: 0.00005 USDC per PAYX
+- Post-sale: Market-driven via DEX trading
+- No fixed price after public sale
+
+Token Utility
+-------------
+1. Payment for Daydreams Router AI services
+2. Governance (future DAO implementation)
+3. Staking rewards (future feature)
+4. Access to premium features
+
+Vesting & Locking
+-----------------
+- Public Sale: Immediate distribution (no vesting)
+- Team & Advisors: 4-year linear vesting, 6-month initial lock
+- Reserve: Locked for 12 months, then gradual release
+
+Smart Contract Details
+----------------------
+Token Contract Address: [DEPLOYED_ADDRESS]
+Distributor Contract: [DISTRIBUTOR_ADDRESS]
+Network: Base Mainnet
+Contract Audit: Pending
+
+Security Considerations
+-----------------------
+- Multi-sig for distributor wallet (recommended)
+- Timelock for large distributions
+- Rate limiting per wallet (anti-whale)
+- Maximum daily distribution cap (optional)
+
+Risk Disclosure
+---------------
+- No guarantees on token price stability
+- Market conditions may affect token value
+- Regulatory compliance varies by jurisdiction
+- Smart contract risk exists (use at own risk)
+
+Rev: 1.0
+Last Updated: 2025-01-30
+
