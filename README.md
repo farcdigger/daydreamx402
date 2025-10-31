@@ -67,11 +67,21 @@ curl -X POST https://your-project.vercel.app/api/pay \
   "status": "success",
   "response": "The capital of France is Paris.",
   "model": "google-vertex/gemini-2.5-flash",
-  "network": "base-sepolia",
+  "network": "base",
   "paymentAmount": "100000",
+  "paymentRecipient": "0x...",  // Seller wallet address (derived from SELLER_PRIVATE_KEY)
   "userBalance": "..."
 }
 ```
+
+## Payment Recipient
+
+**Ödemeler `SELLER_PRIVATE_KEY`'den türetilen cüzdan adresine gider.**
+
+- `SELLER_PRIVATE_KEY` environment variable'ından account oluşturulur
+- Bu account'un adresi (`account.address`) ödeme alıcısıdır
+- Her AI request'te `PAYMENT_AMOUNT` kadar USDC bu adrese gönderilir
+- Response'da `paymentRecipient` field'ı ile hangi adresin ödeme aldığını görebilirsiniz
 
 ## How It Works
 

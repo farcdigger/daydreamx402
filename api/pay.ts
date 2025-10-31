@@ -45,6 +45,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Initialize Daydreams Router with x402 payment
     // Reference: https://docs.daydreams.systems/docs/router
     const account = privateKeyToAccount(SELLER_PRIVATE_KEY);
+    const sellerWalletAddress = account.address; // Payment recipient address
+    
     const { dreamsRouter, user } = await createDreamsRouterAuth(account, {
       payments: {
         amount: PAYMENT_AMOUNT, // $0.10 USDC per request (6-decimal units)
@@ -59,6 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     // Execute AI request - this triggers x402 payment
+    // Payment goes to sellerWalletAddress (derived from SELLER_PRIVATE_KEY)
     const response = await agent.complete(prompt);
 
     return res.status(200).json({
@@ -67,6 +70,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       model: "google-vertex/gemini-2.5-flash",
       network: NETWORK,
       paymentAmount: PAYMENT_AMOUNT,
+      paymentRecipient: sellerWalletAddress, // Wallet address that receives payments
       userBalance: user.balance,
     });
   } catch (error: any) {
