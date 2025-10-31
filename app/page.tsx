@@ -94,20 +94,12 @@ export default function Home() {
     if (isConfirmed && hash && address) {
       setPaymentStatus('Payment successful! Registering...');
       
-      // Register payment with backend (with x402 headers after payment)
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      
-      // Add x402 headers if available from previous payment
-      if (x402Headers?.payment && x402Headers?.signature) {
-        headers['x-402-payment'] = x402Headers.payment;
-        headers['x-402-signature'] = x402Headers.signature;
-      }
-      
+      // Register payment with backend
       fetch('/api/pay', {
         method: 'POST',
-        headers,
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
           wallet: address,
           amount: '5000000',
