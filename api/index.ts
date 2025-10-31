@@ -1,36 +1,31 @@
-// Vercel serverless function entry point
+// Vercel serverless function - minimal test version
 import { Hono } from 'hono';
-import appModule from '../src/index';
 
-// Handle import errors gracefully
-let app: typeof appModule;
+const app = new Hono();
 
-try {
-  app = appModule;
-  
-  // Verify app is a Hono instance
-  if (!app || typeof app.fetch !== 'function') {
-    throw new Error('App is not a valid Hono instance');
-  }
-} catch (error: any) {
-  console.error('Failed to load Hono app:', error);
-  console.error('Error details:', {
-    message: error?.message,
-    stack: error?.stack,
-    name: error?.name
+// Test endpoint
+app.get('/health', (c) => {
+  return c.json({ 
+    status: 'ok',
+    message: 'Server is working',
+    timestamp: new Date().toISOString()
   });
-  
-  // Create minimal error handler app
-  const errorApp = new Hono();
-  errorApp.all('*', (c) => {
-    return c.json({ 
-      error: 'FUNCTION_INVOCATION_FAILED',
-      message: 'Failed to initialize application',
-      details: error?.message || 'Unknown error',
+});
+
+// Basic pay endpoint (without external imports first)
+app.post('/pay', async (c) => {
+  try {
+    return c.json({
+      status: 'test',
+      message: 'Pay endpoint reached',
       timestamp: new Date().toISOString()
+    });
+  } catch (error: any) {
+    return c.json({
+      error: error?.message || 'Unknown error',
+      stack: error?.stack
     }, 500);
-  });
-  app = errorApp;
-}
+  }
+});
 
 export default app;
