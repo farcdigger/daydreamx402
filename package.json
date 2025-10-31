@@ -1,18 +1,16 @@
 {
-  "name": "x402-nanoservice",
+  "name": "payx-token-sale",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun run src/server.ts",
-    "start": "bun run src/server.ts"
+    "dev": "tsx watch api/index.ts",
+    "start": "tsx api/index.ts"
   },
   "dependencies": {
     "@daydreamsai/ai-sdk-provider": "^0.1.0",
     "@daydreamsai/core": "^0.1.0",
-    "hono": "^4.6.9",
     "viem": "^2.21.17",
-    "zod": "^3.23.8",
     "dotenv": "^16.4.5",
     "tsx": "^4.19.2"
   },
