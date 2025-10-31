@@ -67,21 +67,25 @@ export async function POST(req: NextRequest) {
 
       // Make AI call via Dreams Router - this automatically triggers x402 payment
       // The payment amount and recipient come from the router's 402 response
+      // Note: generateText may throw a 402 error which is expected behavior for x402
       try {
         console.log('Calling generateText with Dreams Router...');
+        console.log('Model:', 'google-vertex/gemini-2.5-flash');
+        console.log('Network:', NETWORK_ENV);
+        
         const { text } = await generateText({
           model: dreamsRouter('google-vertex/gemini-2.5-flash'),
           prompt: 'Token presale payment confirmation',
         });
 
-        console.log('generateText completed, text:', text);
+        console.log('generateText completed successfully, text:', text);
 
-        // x402 payment is processed automatically by Dreams Router
-        // Return 402 to indicate payment was initiated
+        // If we get here, x402 payment was successful
+        // Return 402 to client so they can retry with payment headers
         return NextResponse.json(
           {
             error: "Payment required",
-            message: "x402 payment initiated via Dreams Router",
+            message: "x402 payment completed via Dreams Router. Please retry request.",
             amount: PAYMENT_AMOUNT,
             network: NETWORK_ENV,
             recipient: SELLER_WALLET,
@@ -90,11 +94,31 @@ export async function POST(req: NextRequest) {
           { status: 402 }
         );
       } catch (dreamsError: any) {
+        // Check if this is a 402 error (expected behavior for x402 payment flow)
+        // Dreams Router may throw 402 which we should handle gracefully
+        if (dreamsError?.status === 402 || dreamsError?.statusCode === 402 || 
+            dreamsError?.message?.includes('402') || dreamsError?.message?.includes('Payment Required')) {
+          console.log('Received 402 from Dreams Router (expected x402 behavior)');
+          return NextResponse.json(
+            {
+              error: "Payment required",
+              message: "x402 payment initiated via Dreams Router",
+              amount: PAYMENT_AMOUNT,
+              network: NETWORK_ENV,
+              recipient: SELLER_WALLET,
+              x402Payment: true,
+            },
+            { status: 402 }
+          );
+        }
+        
         console.error('Dreams Router x402 payment error:', dreamsError);
         console.error('Error name:', dreamsError?.name);
         console.error('Error message:', dreamsError?.message);
+        console.error('Error status:', dreamsError?.status);
+        console.error('Error statusCode:', dreamsError?.statusCode);
+        console.error('Error code:', dreamsError?.code);
         console.error('Error stack:', dreamsError?.stack);
-        console.error('Full error:', JSON.stringify(dreamsError, null, 2));
         
         return NextResponse.json(
           {
