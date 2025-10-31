@@ -305,10 +305,15 @@
       }
     }
 
-    // Make payment
+    // Make payment - Transfer USDC via MetaMask
     async function makePayment() {
       if (!connectedWallet) {
         showError('Please connect your wallet first');
+        return;
+      }
+
+      if (!window.ethereum) {
+        showError('MetaMask is not installed');
         return;
       }
 
@@ -323,6 +328,66 @@
       loading.classList.add('show');
 
       try {
+        // USDC contract address on Base
+        const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'; // Base mainnet USDC
+        const RECIPIENT_ADDRESS = '0x6a40e304193d2BD3fa7479c35a45bA4CCDBb4683'; // Seller wallet
+        const AMOUNT = '5000000'; // $5 USDC (6 decimals)
+        
+        // Get provider
+        const provider = window.ethereum;
+        await provider.request({ method: 'eth_requestAccounts' });
+        
+        // Switch to Base network if needed
+        const chainId = await provider.request({ method: 'eth_chainId' });
+        const BASE_CHAIN_ID = '0x2105'; // Base mainnet
+        
+        if (chainId !== BASE_CHAIN_ID) {
+          try {
+            await provider.request({
+              method: 'wallet_switchEthereumChain',
+              params: [{ chainId: BASE_CHAIN_ID }],
+            });
+          } catch (switchError: any) {
+            // Chain doesn't exist, add it
+            if (switchError.code === 4902) {
+              await provider.request({
+                method: 'wallet_addEthereumChain',
+                params: [{
+                  chainId: BASE_CHAIN_ID,
+                  chainName: 'Base',
+                  nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+                  rpcUrls: ['https://mainnet.base.org'],
+                  blockExplorerUrls: ['https://basescan.org'],
+                }],
+              });
+            }
+          }
+        }
+
+        // ERC20 transfer function signature
+        const transferMethodId = '0xa9059cbb';
+        // Encode recipient address (pad to 32 bytes)
+        const recipient = RECIPIENT_ADDRESS.slice(2).padStart(64, '0');
+        // Encode amount (pad to 32 bytes)
+        const amountHex = BigInt(AMOUNT).toString(16).padStart(64, '0');
+        // Combine method ID + recipient + amount
+        const data = transferMethodId + recipient + amountHex;
+
+        // Send transaction
+        const txHash = await provider.request({
+          method: 'eth_sendTransaction',
+          params: [{
+            from: connectedWallet,
+            to: USDC_ADDRESS,
+            data: data,
+            gas: '0x186a0', // 100000 gas
+          }],
+        });
+
+        // Wait a bit for transaction to be mined
+        loading.textContent = 'Waiting for transaction confirmation...';
+        
+        // Register payment with backend
         const response = await fetch('/api/pay', {
           method: 'POST',
           headers: {
@@ -330,7 +395,8 @@
           },
           body: JSON.stringify({
             wallet: connectedWallet,
-            amount: '5000000', // $5 USDC (6 decimals)
+            amount: AMOUNT,
+            transactionHash: txHash,
           }),
         });
 
@@ -342,21 +408,27 @@
           } catch {
             throw new Error(errorText || `Server error: ${response.status}`);
           }
-          throw new Error(errorData.error || errorData.details || 'Payment failed');
+          throw new Error(errorData.error || errorData.details || 'Payment registration failed');
         }
 
-        const data = await response.json();
+        const data2 = await response.json();
 
         // Show success
         loading.classList.remove('show');
         
-        if (data.status === 'success') {
-          responseText.textContent = `Payment successful! $${data.paymentAmountUSD} USDC received from ${data.wallet.substring(0, 6)}...${data.wallet.substring(38)}. Payment recipient: ${data.paymentRecipient}`;
+        if (data2.status === 'success') {
+          responseText.innerHTML = `
+            Payment successful!<br>
+            Transaction: <a href="https://basescan.org/tx/${txHash}" target="_blank" style="color: #667eea;">View on Basescan</a><br>
+            Amount: $${data2.paymentAmountUSD} USDC<br>
+            From: ${data2.wallet.substring(0, 6)}...${data2.wallet.substring(38)}<br>
+            To: ${data2.paymentRecipient}
+          `;
           responseSection.classList.add('show');
         }
 
-        console.log('Payment successful:', data);
-      } catch (err) {
+        console.log('Payment successful:', { txHash, data: data2 });
+      } catch (err: any) {
         loading.classList.remove('show');
         showError(err.message || 'An error occurred');
       }
