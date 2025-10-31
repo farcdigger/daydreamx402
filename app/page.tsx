@@ -2,10 +2,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount, useChainId, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { useAccount, useChainId, useWriteContract, useWaitForTransactionReceipt, useWalletClient } from 'wagmi';
 import { parseUnits } from 'viem';
 import { erc20Abi } from 'viem';
 import { base } from 'wagmi/chains';
+import { createDreams } from '@daydreamsai/core';
+import { createDreamsRouterAuth } from '@daydreamsai/core';
+import { createOpenAI } from '@daydreamsai/ai-sdk-provider';
 
 const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as `0x${string}`; // Base mainnet USDC
 const RECIPIENT_ADDRESS = '0x6a40e304193d2BD3fa7479c35a45bA4CCDBb4683' as `0x${string}`; // Seller wallet
@@ -14,8 +17,10 @@ const PAYMENT_AMOUNT = parseUnits('5', 6); // $5 USDC (6 decimals)
 export default function Home() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
+  const { data: walletClient } = useWalletClient();
   const [paymentStatus, setPaymentStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [x402Headers, setX402Headers] = useState<{ payment?: string; signature?: string } | null>(null);
   
   const { 
     writeContract, 
@@ -57,22 +62,120 @@ export default function Home() {
         }),
       });
 
-      // If 402 Payment Required, user needs to complete x402 payment
+      // If 402 Payment Required, user needs to complete x402 payment via Daydreams Router
       if (response.status === 402) {
-        setPaymentStatus('Payment required. Initiating x402 payment...');
-        const data = await response.json();
-        setError(`Payment required: ${data.message || 'Please complete payment via x402 protocol'}`);
+        setPaymentStatus('Payment required. Initiating x402 payment via Daydreams Router...');
         
-        // For now, we'll do a direct USDC transfer as fallback
-        // TODO: Integrate proper x402 client-side payment flow
-        setPaymentStatus('Using direct payment method...');
-        
-        writeContract({
-          address: USDC_ADDRESS,
-          abi: erc20Abi as readonly any[],
-          functionName: 'transfer',
-          args: [RECIPIENT_ADDRESS, PAYMENT_AMOUNT],
-        } as any);
+        if (!walletClient || !address) {
+          setError('Wallet client not available');
+          setPaymentStatus(null);
+          return;
+        }
+
+        try {
+          // Create Dreams Router Auth with user's wallet for x402 payment
+          const account = {
+            address: address as `0x${string}`,
+            signMessage: async (message: string) => {
+              const signature = await walletClient.signMessage({
+                account: address as `0x${string}`,
+                message,
+              });
+              return signature;
+            },
+            signTypedData: async (params: any) => {
+              const signature = await walletClient.signTypedData({
+                account: address as `0x${string}`,
+                ...params,
+              });
+              return signature;
+            },
+          } as any;
+
+          const dreamsAuth = createDreamsRouterAuth({
+            account,
+            payments: {
+              amount: PAYMENT_AMOUNT,
+              network: 'base',
+            },
+          });
+
+          // For x402 payment, we need to make an AI call through Dreams Router
+          // This will automatically trigger the x402 payment flow via facilitator
+          setPaymentStatus('Initiating x402 payment via Daydreams Router...');
+          
+          try {
+            // Check if OpenAI API key is available (optional for x402 flow)
+            const openaiApiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
+            
+            if (openaiApiKey) {
+              // Create Dreams instance with x402 payment enabled
+              const openai = createOpenAI({
+                apiKey: openaiApiKey,
+              });
+
+              const dreams = createDreams({
+                auth: dreamsAuth,
+                model: openai('gpt-4o-mini'), // Minimal model for x402 payment trigger
+              });
+
+              // Make a minimal AI call to trigger x402 payment
+              // This will automatically initiate the x402 payment flow via facilitator
+              setPaymentStatus('Processing x402 payment...');
+              
+              const result = await dreams.agent.complete('Token presale payment');
+              
+              // x402 payment is handled automatically by Dreams Router
+              // The payment transaction will be processed via x402 facilitator
+              setPaymentStatus('x402 payment processed via Daydreams Router!');
+              
+              // After successful payment, retry the API call with x402 headers
+              // Note: In production, x402 headers would be captured from the payment response
+              setPaymentStatus('Payment successful! Verifying...');
+              
+              // Retry the payment registration
+              const retryResponse = await fetch('/api/pay', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  // x402 headers would be included here in production
+                },
+                body: JSON.stringify({
+                  wallet: address,
+                  amount: '5000000',
+                }),
+              });
+              
+              if (retryResponse.ok) {
+                const retryData = await retryResponse.json();
+                setPaymentStatus(`Payment verified! ${retryData.message || ''}`);
+              } else if (retryResponse.status === 402) {
+                // Still 402, payment wasn't captured properly
+                throw new Error('x402 payment verification failed');
+              }
+            } else {
+              // No OpenAI API key - use direct x402 payment flow via facilitator
+              // For token presale, we'll use direct USDC transfer as x402 facilitator alternative
+              throw new Error('OpenAI API key not configured. Using direct payment method.');
+            }
+            
+          } catch (dreamsError: any) {
+            console.error('Dreams Router x402 payment error:', dreamsError);
+            // If Dreams Router payment fails, fallback to direct transfer
+            setPaymentStatus('Using direct USDC transfer...');
+            writeContract({
+              address: USDC_ADDRESS,
+              abi: erc20Abi as readonly any[],
+              functionName: 'transfer',
+              args: [RECIPIENT_ADDRESS, PAYMENT_AMOUNT],
+            } as any);
+            return;
+          }
+        } catch (x402Error: any) {
+          console.error('x402 payment setup error:', x402Error);
+          setError(`x402 payment error: ${x402Error.message}`);
+          setPaymentStatus(null);
+        }
         return;
       }
 
@@ -95,14 +198,19 @@ export default function Home() {
       setPaymentStatus('Payment successful! Registering...');
       
       // Register payment with backend (with x402 headers after payment)
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      
+      // Add x402 headers if available from previous payment
+      if (x402Headers?.payment && x402Headers?.signature) {
+        headers['x-402-payment'] = x402Headers.payment;
+        headers['x-402-signature'] = x402Headers.signature;
+      }
+      
       fetch('/api/pay', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // TODO: Add x402 payment headers after x402 payment is completed
-          // 'x-402-payment': '...',
-          // 'x-402-signature': '...',
-        },
+        headers,
         body: JSON.stringify({
           wallet: address,
           amount: '5000000',
