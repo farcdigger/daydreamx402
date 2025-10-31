@@ -34,9 +34,9 @@ DREAMSROUTER_API_KEY=your_api_key_here
 SELLER_PRIVATE_KEY=0x... # Private key of seller wallet for x402 payments
 
 # Payment Configuration
-SELLER_WALLET=0x6a40e304193d2BD3fa7479c35a45bA4CCDBb4683
-PAYMENT_AMOUNT=5000000 # $5 USDC (6 decimals)
-NETWORK=base # Base network for payments
+NETWORK=base # Base network for payments (base or base-sepolia)
+# Note: Payment amounts and recipient addresses are automatically set by Dreams Router
+# They come from the router's 402 response - you don't set them manually
 
 # Note: Get Dreams Router API key from https://router.daydreams.systems
 # Note: No WalletConnect Project ID needed - Using MetaMask only
@@ -55,10 +55,9 @@ Visit http://localhost:3000
 1. Connect your GitHub repository to Vercel
 2. Set environment variables in Vercel dashboard:
    - `DREAMSROUTER_API_KEY` (required - get from https://router.daydreams.systems) **OR**
-   - `SELLER_PRIVATE_KEY` (alternative - private key of seller wallet)
-   - `SELLER_WALLET` (optional, defaults to provided address)
-   - `PAYMENT_AMOUNT` (optional, defaults to 5000000)
-   - `NETWORK` (optional, defaults to "base")
+   - `SELLER_PRIVATE_KEY` (alternative - private key of seller wallet for x402 payments)
+   - `NETWORK` (optional, defaults to "base" - use "base" for mainnet or "base-sepolia" for testnet)
+   - Note: Payment amounts and recipient addresses are set automatically by Dreams Router from dashboard/config
 3. Deploy automatically
 
 ## How It Works (x402 Payment Flow)
