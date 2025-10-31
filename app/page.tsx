@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount, useChainId, useWriteContract, useWaitForTransactionReceipt, useWalletClient } from 'wagmi';
+import { useAccount, useChainId, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { parseUnits } from 'viem';
 import { erc20Abi } from 'viem';
 import { base } from 'wagmi/chains';
