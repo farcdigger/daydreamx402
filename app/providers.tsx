@@ -1,22 +1,26 @@
 'use client';
 
 import '@rainbow-me/rainbowkit/styles.css';
-import { getDefaultConfig, RainbowKitProvider } from '@rainbow-me/rainbowkit';
+import { RainbowKitProvider } from '@rainbow-me/rainbowkit';
 import { WagmiProvider } from 'wagmi';
 import { base } from 'wagmi/chains';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
+import { http } from 'viem';
+import { createConfig } from 'wagmi';
+import { injected } from 'wagmi/connectors';
 
-const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
-
-if (!projectId) {
-  console.error('Error: NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is required!');
-  console.error('Get one from https://cloud.walletconnect.com');
-}
-
-const config = getDefaultConfig({
-  appName: 'Token Presale',
-  projectId: projectId || '00000000000000000000000000000000', // Required: Replace with actual project ID
+// Create wagmi config without WalletConnect (MetaMask only)
+// No WalletConnect Project ID needed
+const config = createConfig({
   chains: [base],
+  connectors: [
+    injected({
+      shimDisconnect: true,
+    }),
+  ],
+  transports: {
+    [base.id]: http(),
+  },
   ssr: true,
 });
 

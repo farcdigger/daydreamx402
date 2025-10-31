@@ -26,10 +26,6 @@ npm install
 Create `.env.local` file:
 
 ```env
-# WalletConnect Project ID (required)
-# Get from https://cloud.walletconnect.com
-NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your_project_id_here
-
 # x402 Payment Configuration (required)
 SELLER_PRIVATE_KEY=0x... # Private key of seller wallet for x402 payments
 SELLER_WALLET=0x6a40e304193d2BD3fa7479c35a45bA4CCDBb4683
@@ -37,17 +33,10 @@ PAYMENT_AMOUNT=5000000 # $5 USDC (6 decimals)
 NETWORK=base # Base network for payments
 
 # Note: No OpenAI API key needed - Dreams Router handles models internally
+# Note: No WalletConnect Project ID needed - Using MetaMask only
 ```
 
-### 3. Get WalletConnect Project ID
-
-1. Visit https://cloud.walletconnect.com
-2. Create a free account
-3. Create a new project
-4. Copy your Project ID
-5. Add to `.env.local` as `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`
-
-### 4. Run Locally
+### 3. Run Locally
 
 ```bash
 npm run dev
@@ -55,11 +44,10 @@ npm run dev
 
 Visit http://localhost:3000
 
-### 5. Deploy to Vercel
+### 4. Deploy to Vercel
 
 1. Connect your GitHub repository to Vercel
 2. Set environment variables in Vercel dashboard:
-   - `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` (required)
    - `SELLER_PRIVATE_KEY` (required for x402 payments)
    - `SELLER_WALLET` (optional, defaults to provided address)
    - `PAYMENT_AMOUNT` (optional, defaults to 5000000)
@@ -69,7 +57,7 @@ Visit http://localhost:3000
 ## How It Works (x402 Payment Flow)
 
 1. **User visits site** → RainbowKit wallet selector appears
-2. **User connects wallet** → MetaMask, WalletConnect, Coinbase Wallet, etc.
+2. **User connects wallet** → MetaMask (browser extension)
 3. **User clicks "Pay $5 USDC"** → Frontend sends request to backend
 4. **Backend checks x402 payment** → Returns 402 Payment Required if no payment headers
 5. **Backend initiates x402 payment via Dreams Router** → Server-side only:
