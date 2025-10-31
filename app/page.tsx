@@ -3,7 +3,7 @@
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { parseUnits, formatUnits } from 'viem';
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { erc20Abi } from 'viem';
 
 const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as `0x${string}`; // Base mainnet USDC
@@ -50,8 +50,8 @@ export default function Home() {
   };
 
   // Handle transaction success
-  useState(() => {
-    if (isConfirmed && hash) {
+  React.useEffect(() => {
+    if (isConfirmed && hash && address) {
       setPaymentStatus('Payment successful! Registering...');
       
       // Register payment with backend
@@ -78,7 +78,7 @@ export default function Home() {
           setPaymentStatus(null);
         });
     }
-  });
+  }, [isConfirmed, hash, address]);
 
   return (
     <div style={styles.container}>
