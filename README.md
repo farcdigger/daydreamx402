@@ -4,28 +4,25 @@ Pay-per-use token sale system on Base network using x402 payment protocol and Da
 
 ## Overview
 
-PAYX token sale enables users to purchase PAYX tokens using USDC on Base network. The system uses x402 middleware for payment verification and automatically distributes 20,000 PAYX tokens per 1 USDC paid.
+PAYX payment system accepts USDC payments on Base network using x402 payment protocol. The system verifies payments via x402 facilitator and returns payment status.
 
 ## Features
 
 - **x402 Payment Protocol**: Standardized micropayment handling with 402 Payment Required status
 - **Base Network**: USDC payments settled on Base mainnet (or Sepolia for testing)
-- **Automatic Token Distribution**: 20,000 PAYX per 1 USDC without claim buttons
+- **Payment Verification**: x402 facilitator validates payments
 - **Daydreams Router Integration**: Optional AI service access gated by payment verification
-- **Payment Verification**: x402 facilitator validates payments before token distribution
 
 ## Architecture
 
 ```
-User → POST /pay → x402 Middleware
+User → POST /api/pay → x402 Middleware
                       ↓
               Payment Required? (402)
                       ↓
          x402 Facilitator Verification
                       ↓
-              Payment Verified
-                      ↓
-          Token Distribution (20k PAYX/USDC)
+              Payment Verified (200)
                       ↓
          Daydreams Router Access (optional)
 ```
@@ -37,19 +34,13 @@ Create a `.env` file in the project root:
 ```env
 # x402 Configuration
 X402_FACILITATOR_URL=https://x402.org/api/v1
-BASE_RPC_URL=https://mainnet.base.org
 
-# Token Distribution
-PAYX_TOKEN_ADDRESS=0x...  # PAYX ERC-20 contract address
-DISTRIBUTOR_PRIVATE_KEY=0x...  # Private key for token distribution
-TOKENS_PER_USDC=20000  # 20,000 PAYX per 1 USDC
+# Network
+NETWORK=base  # or base-sepolia for testing
 
 # Daydreams Router (optional)
 DAYDREAMS_API_KEY=your_api_key_here
 DAYDREAMS_NETWORK=base  # or base-sepolia for testing
-
-# Network
-NETWORK=base  # or base-sepolia for testing
 ```
 
 ## Setup Instructions
@@ -66,14 +57,8 @@ bun install
 
 Copy `.env.example` to `.env` and fill in your values:
 
-- `PAYX_TOKEN_ADDRESS`: Your PAYX ERC-20 token contract address on Base
-- `DISTRIBUTOR_PRIVATE_KEY`: Private key of wallet that holds PAYX tokens for distribution
-- `X402_FACILITATOR_URL`: x402 facilitator API endpoint
-- `BASE_RPC_URL`: Base network RPC endpoint
-
-### 3. Deploy Token Contract
-
-Ensure your PAYX token contract is deployed on Base network (or Base Sepolia for testing). The distributor wallet must have sufficient PAYX balance for distribution.
+- `X402_FACILITATOR_URL`: x402 facilitator API endpoint (default: https://x402.org/api/v1)
+- `NETWORK`: Network to use (`base` for mainnet, `base-sepolia` for testing)
 
 ### 4. Run Locally
 
@@ -110,10 +95,11 @@ Purchase PAYX tokens using USDC via x402 payment protocol.
 ```json
 {
   "status": "success",
+  "message": "Payment verified successfully",
   "transactionHash": "0x...",
   "usdcPaid": "1.0",
-  "payxReceived": "20000",
-  "distributedTxHash": "0x..."
+  "network": "base",
+  "verifiedAt": "2025-01-30T12:00:00.000Z"
 }
 ```
 
@@ -138,11 +124,9 @@ Purchase PAYX tokens using USDC via x402 payment protocol.
 
 1. **Request Received**: User sends POST /api/pay with wallet and amount
 2. **Payment Check**: Middleware verifies payment via x402 facilitator
-3. **402 Status**: If payment not found, return 402 Payment Required
+3. **402 Status**: If payment not found, return 402 Payment Required with facilitator URL
 4. **Payment Verified**: x402 facilitator confirms USDC payment on Base
-5. **Token Calculation**: Calculate PAYX = amount * 20,000
-6. **Token Distribution**: Automatically send PAYX to user wallet
-7. **Response**: Return transaction hash and token amount
+5. **Response**: Return success with transaction hash and payment details
 
 ## Daydreams Router Integration
 
@@ -164,12 +148,11 @@ const { dreamsRouter } = await createDreamsRouterAuth(
 );
 ```
 
-## Token Distribution Logic
+## Payment Verification Logic
 
-- **Rate**: 20,000 PAYX per 1 USDC
-- **Automatic**: No claim buttons, distribution happens immediately after payment verification
-- **On-chain**: Token transfer executed on Base network
-- **Gas**: Paid by distributor wallet
+- **Payment Required**: Returns 402 status if payment not verified
+- **Verification**: Uses x402 facilitator to verify USDC payment on Base network
+- **Success**: Returns 200 status with transaction hash when payment verified
 
 ## Testing
 
