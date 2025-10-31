@@ -1,28 +1,17 @@
-# Daydreams Router + x402 Payment Integration
+# Token Presale - Base Network
 
-Pay-per-use AI service using Daydreams Router with x402 USDC micropayments on Base network.
-
-Based on: [Daydreams Router Documentation](https://docs.daydreams.systems/docs/router)
+Token presale payment system with RainbowKit wallet connection and USDC payments on Base network.
 
 ## Overview
 
-This project demonstrates a complete AI service that uses x402 micropayments through the Daydreams Router. Each AI request triggers an automatic payment of $0.10 USDC.
-
-**Architecture:**
-```
-Your App → POST /api/pay → Daydreams Router → Provider (Google/OpenAI/etc)
-                                ↓
-                         x402 Payment ($0.10 USDC)
-                                ↓
-                         AI Response
-```
+Users connect their wallet via RainbowKit, pay $5 USDC, and participate in the token presale. Payments are processed on Base mainnet.
 
 ## Features
 
-- **x402 Micropayments**: Automatic USDC payment per AI request
-- **Daydreams Router**: Unified interface for multiple AI providers
-- **Base Network**: Payments settled on Base (mainnet or Sepolia)
-- **Zero Configuration**: Simple POST request to get AI responses
+- **RainbowKit Integration**: Professional wallet connection UI supporting multiple wallets
+- **Base Network**: USDC payments on Base mainnet
+- **Wagmi + Viem**: Type-safe Ethereum interactions
+- **Next.js 14**: Modern React framework with App Router
 
 ## Quick Start
 
@@ -34,92 +23,98 @@ npm install
 
 ### 2. Environment Variables
 
-Create `.env` file:
+Create `.env.local` file:
 
 ```env
-SELLER_PRIVATE_KEY=0x...  # Private key of wallet for Daydreams Router auth
-PAYMENT_AMOUNT=100000     # $0.10 USDC per request (6-decimal units)
-NETWORK=base              # base (mainnet) or base-sepolia (test)
+# WalletConnect Project ID (required)
+# Get from https://cloud.walletconnect.com
+NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your_project_id_here
+
+# Payment Configuration (optional)
+SELLER_WALLET=0x6a40e304193d2BD3fa7479c35a45bA4CCDBb4683
+PAYMENT_AMOUNT=5000000
+NETWORK=base
 ```
 
-### 3. Deploy to Vercel
+### 3. Get WalletConnect Project ID
+
+1. Visit https://cloud.walletconnect.com
+2. Create a free account
+3. Create a new project
+4. Copy your Project ID
+5. Add to `.env.local` as `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`
+
+### 4. Run Locally
+
+```bash
+npm run dev
+```
+
+Visit http://localhost:3000
+
+### 5. Deploy to Vercel
 
 1. Connect your GitHub repository to Vercel
-2. Set environment variables in Vercel dashboard
+2. Set environment variables in Vercel dashboard:
+   - `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` (required)
+   - `SELLER_WALLET` (optional)
+   - `PAYMENT_AMOUNT` (optional)
+   - `NETWORK` (optional)
 3. Deploy automatically
 
-## API Usage
+## How It Works
+
+1. **User visits site** → RainbowKit wallet selector appears
+2. **User connects wallet** → MetaMask, WalletConnect, Coinbase Wallet, etc.
+3. **User clicks "Pay $5 USDC"** → MetaMask transaction popup
+4. **User approves transaction** → USDC transferred to seller wallet
+5. **Payment confirmed** → Transaction hash saved, success message shown
+
+## Tech Stack
+
+- **Next.js 14**: React framework with App Router
+- **RainbowKit**: Wallet connection UI
+- **Wagmi**: React Hooks for Ethereum
+- **Viem**: TypeScript Ethereum library
+- **Base Network**: Layer 2 for payments
+
+## Payment Details
+
+- **Amount**: $5 USDC
+- **Network**: Base mainnet
+- **USDC Contract**: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
+- **Recipient**: `0x6a40e304193d2BD3fa7479c35a45bA4CCDBb4683`
+
+## API Endpoints
 
 ### POST /api/pay
 
-Send a prompt and receive an AI response. Payment is handled automatically via x402.
+Register a payment transaction.
 
 **Request:**
-```bash
-curl -X POST https://your-project.vercel.app/api/pay \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "What is the capital of France?"}'
+```json
+{
+  "wallet": "0x...",
+  "amount": "5000000",
+  "transactionHash": "0x..."
+}
 ```
 
 **Response:**
 ```json
 {
   "status": "success",
-  "response": "The capital of France is Paris.",
-  "model": "google-vertex/gemini-2.5-flash",
-  "network": "base",
-  "paymentAmount": "100000",
-  "paymentRecipient": "0x...",  // Seller wallet address (derived from SELLER_PRIVATE_KEY)
-  "userBalance": "..."
+  "wallet": "0x...",
+  "paymentAmount": "5000000",
+  "paymentAmountUSD": "5.00",
+  "paymentRecipient": "0x...",
+  "transactionHash": "0x...",
+  "timestamp": "..."
 }
-```
-
-## Payment Recipient
-
-**Ödemeler `SELLER_PRIVATE_KEY`'den türetilen cüzdan adresine gider.**
-
-- `SELLER_PRIVATE_KEY` environment variable'ından account oluşturulur
-- Bu account'un adresi (`account.address`) ödeme alıcısıdır
-- Her AI request'te `PAYMENT_AMOUNT` kadar USDC bu adrese gönderilir
-- Response'da `paymentRecipient` field'ı ile hangi adresin ödeme aldığını görebilirsiniz
-
-## How It Works
-
-Based on the [Daydreams Router documentation](https://docs.daydreams.systems/docs/router):
-
-1. **Initialize Router**: `createDreamsRouterAuth` sets up authentication with x402 payments
-2. **Create Agent**: `createDreams` with `dreamsRouter("model-name")` creates the AI agent
-3. **Execute Request**: `agent.complete(prompt)` triggers:
-   - x402 payment (automatically deducted)
-   - AI model call via Daydreams Router
-   - Standardized response
-
-## Configuration
-
-### Payment Amount
-
-Set `PAYMENT_AMOUNT` in 6-decimal USDC units:
-- `100000` = $0.10 USDC
-- `1000000` = $1.00 USDC
-- `500000` = $0.50 USDC
-
-### Network
-
-- `base`: Base mainnet (default, for production)
-- `base-sepolia`: Base Sepolia testnet (for testing)
-
-### Model
-
-Default model: `google-vertex/gemini-2.5-flash`
-
-You can change the model in `api/pay.ts`:
-```typescript
-model: dreamsRouter("openai/gpt-4")  // Example: OpenAI GPT-4
 ```
 
 ## References
 
-- [Daydreams Router Documentation](https://docs.daydreams.systems/docs/router)
-- [x402 Payment Protocol](https://x402.org)
+- [RainbowKit Documentation](https://rainbowkit.com/tr/docs/installation)
+- [Wagmi Documentation](https://wagmi.sh)
 - [Base Network](https://base.org)
-
