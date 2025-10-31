@@ -6,7 +6,10 @@ import { privateKeyToAccount } from "viem/accounts";
 // Environment variables
 const SELLER_PRIVATE_KEY = process.env.SELLER_PRIVATE_KEY as `0x${string}`;
 const PAYMENT_AMOUNT = process.env.PAYMENT_AMOUNT || "100000"; // $0.10 USDC (6 decimals)
-const NETWORK = process.env.NETWORK || "base-sepolia"; // base-sepolia or base
+const NETWORK_ENV = process.env.NETWORK || "base";
+const NETWORK = (NETWORK_ENV === "base" || NETWORK_ENV === "base-sepolia" 
+  ? NETWORK_ENV 
+  : "base") as "base" | "base-sepolia";
 
 if (!SELLER_PRIVATE_KEY) {
   throw new Error("SELLER_PRIVATE_KEY environment variable is required");
