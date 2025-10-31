@@ -8,13 +8,15 @@
     "start": "next start"
   },
   "dependencies": {
+    "@daydreamsai/ai-sdk-provider": "^0.1.5",
+    "@daydreamsai/core": "^0.3.22",
     "@rainbow-me/rainbowkit": "^2.2.9",
     "@tanstack/react-query": "^5.62.2",
     "next": "^14.2.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "wagmi": "^2.16.3",
-    "viem": "^2.21.17"
+    "viem": "^2.21.17",
+    "wagmi": "^2.16.3"
   },
   "devDependencies": {
     "@types/node": "^22.7.5",

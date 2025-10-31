@@ -36,7 +36,7 @@ export default function Home() {
     }
 
     setError(null);
-    setPaymentStatus('Preparing transaction...');
+    setPaymentStatus('Preparing payment...');
 
     if (chainId !== base.id) {
       setError('Please switch to Base network');
@@ -45,28 +45,63 @@ export default function Home() {
     }
 
     try {
-      writeContract({
-        address: USDC_ADDRESS,
-        abi: erc20Abi as readonly any[],
-        functionName: 'transfer',
-        args: [RECIPIENT_ADDRESS, PAYMENT_AMOUNT],
-      } as any);
+      // Step 1: Try to register payment (will get 402 if payment required)
+      const response = await fetch('/api/pay', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          wallet: address,
+          amount: '5000000',
+        }),
+      });
+
+      // If 402 Payment Required, user needs to complete x402 payment
+      if (response.status === 402) {
+        setPaymentStatus('Payment required. Initiating x402 payment...');
+        const data = await response.json();
+        setError(`Payment required: ${data.message || 'Please complete payment via x402 protocol'}`);
+        
+        // For now, we'll do a direct USDC transfer as fallback
+        // TODO: Integrate proper x402 client-side payment flow
+        setPaymentStatus('Using direct payment method...');
+        
+        writeContract({
+          address: USDC_ADDRESS,
+          abi: erc20Abi as readonly any[],
+          functionName: 'transfer',
+          args: [RECIPIENT_ADDRESS, PAYMENT_AMOUNT],
+        } as any);
+        return;
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Payment failed');
+      }
+
+      const data = await response.json();
+      setPaymentStatus(`Payment successful! ${data.message || ''}`);
     } catch (err: any) {
-      setError(err.message || 'Transaction failed');
+      setError(err.message || 'Payment failed');
       setPaymentStatus(null);
     }
   };
 
-  // Handle transaction success
+  // Handle transaction success - register with backend (with x402 headers if needed)
   useEffect(() => {
     if (isConfirmed && hash && address) {
       setPaymentStatus('Payment successful! Registering...');
       
-      // Register payment with backend
+      // Register payment with backend (with x402 headers after payment)
       fetch('/api/pay', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          // TODO: Add x402 payment headers after x402 payment is completed
+          // 'x-402-payment': '...',
+          // 'x-402-signature': '...',
         },
         body: JSON.stringify({
           wallet: address,
@@ -75,11 +110,18 @@ export default function Home() {
         }),
       })
         .then(async (res) => {
-          if (!res.ok) throw new Error(await res.text());
+          if (res.status === 402) {
+            // If still 402, payment wasn't verified via x402
+            throw new Error('Payment verification failed. Please retry.');
+          }
+          if (!res.ok) {
+            const errorText = await res.text();
+            throw new Error(errorText || 'Registration failed');
+          }
           return res.json();
         })
         .then((data) => {
-          setPaymentStatus(`Payment successful! Transaction: ${hash}`);
+          setPaymentStatus(`Payment verified and recorded! Transaction: ${hash}`);
         })
         .catch((err) => {
           setError(err.message);

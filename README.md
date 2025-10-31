@@ -30,10 +30,11 @@ Create `.env.local` file:
 # Get from https://cloud.walletconnect.com
 NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your_project_id_here
 
-# Payment Configuration (optional)
+# x402 Payment Configuration (required)
+SELLER_PRIVATE_KEY=0x... # Private key of seller wallet for x402 payments
 SELLER_WALLET=0x6a40e304193d2BD3fa7479c35a45bA4CCDBb4683
-PAYMENT_AMOUNT=5000000
-NETWORK=base
+PAYMENT_AMOUNT=5000000 # $5 USDC (6 decimals)
+NETWORK=base # Base network for payments
 ```
 
 ### 3. Get WalletConnect Project ID
@@ -57,18 +58,21 @@ Visit http://localhost:3000
 1. Connect your GitHub repository to Vercel
 2. Set environment variables in Vercel dashboard:
    - `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` (required)
-   - `SELLER_WALLET` (optional)
-   - `PAYMENT_AMOUNT` (optional)
-   - `NETWORK` (optional)
+   - `SELLER_PRIVATE_KEY` (required for x402 payments)
+   - `SELLER_WALLET` (optional, defaults to provided address)
+   - `PAYMENT_AMOUNT` (optional, defaults to 5000000)
+   - `NETWORK` (optional, defaults to "base")
 3. Deploy automatically
 
-## How It Works
+## How It Works (x402 Payment Flow)
 
 1. **User visits site** → RainbowKit wallet selector appears
 2. **User connects wallet** → MetaMask, WalletConnect, Coinbase Wallet, etc.
-3. **User clicks "Pay $5 USDC"** → MetaMask transaction popup
-4. **User approves transaction** → USDC transferred to seller wallet
-5. **Payment confirmed** → Transaction hash saved, success message shown
+3. **User clicks "Pay $5 USDC"** → Frontend sends request to backend
+4. **Backend checks x402 payment** → Returns 402 Payment Required if no payment
+5. **User completes payment** → Payment via x402 protocol (currently direct transfer as fallback)
+6. **Backend verifies payment** → x402 headers verified, payment recorded
+7. **Success** → Payment confirmed and registered
 
 ## Tech Stack
 
